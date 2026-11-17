@@ -1,0 +1,14 @@
+{
+    "name": "FlameAndBlame.UI",
+    "rootNamespace": "FlameAndBlame.UI",
+    "references": ["Injection", "FlameAndBlame.Core", "FlameAndBlame.Rescue", "FlameAndBlame.GameRules", "UnityEngine.UI", "Unity.TextMeshPro"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

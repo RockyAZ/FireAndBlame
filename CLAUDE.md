@@ -158,3 +158,14 @@ class GameManager : MonoBehaviour     // [Inject] HeliController, HumansSystem, 
 
 // Testing: TestModeController (Initialize, EnterAll/ExitAll over ITestModeAware under Game), ScriptedControlSource : IControlSource (Set(HeliCommand)), ScenarioRunner
 ```
+
+## Contract additions (Phase 0 design; the contract above is unchanged, these only add members)
+Full behaviour in GAME_DESIGN.md.
+- Cup: `[Inject] IControlSource` (reads TugPressed in Update, ignored in test mode; Heli cannot call Rescue); `bool InPool; void SetInPool(bool)` (set by PoolZone); serialized `Rigidbody anchorBody` (heli body), `WaterDrop dropPrefab`; `Initialize()` builds the joint chain from CupConfig.
+- WaterDrop: `void ReportHit(Collider other)`. Human: `bool IsStunned; event Action<float> StrengthChanged; void TickStrength(float dt, float acceleration)`.
+- FireSide: `void Advance(float dt)` (called by its own Update; tests call it), `float PauseTimeLeft`, `void ApplyBuilding(BuildingConfig)`; two child colliders: burn trigger band (kills) and water catch trigger (full height).
+- FireSystem: `[Inject] BuildingConfig`, serialized `GroundFireZone[]`; GroundFireZone: `Initialize(FireConfig)`, `void Extinguish(float amount01)` (only used when groundFirePermanent is false).
+- Zones forward physics via public `ReportEnter(Collider)`, `ReportStay(Collider)`, `ReportExit(Collider)` where relevant (PoolZone, RoofZone, GroundFireZone, FireSide burn trigger, Cup grab zone).
+- Config classes also hold extra fields listed in GAME_DESIGN.md section 7; `PoolConfig` is a [Serializable] class inside GameRulesConfig.
+- Layer interactions needed beyond the matrix above (triggers): Human x FireZone, Human x Water, Cup x Water, Cup x Human (grab zone), Water(drop) x FireZone/Building/Ground/Obstacle. WaterDrop uses layer Water.
+- GameManager: Won also requires at least one human in ChillingInPool, otherwise Lost.

@@ -1,0 +1,14 @@
+{
+    "name": "FlameAndBlame.Heli",
+    "rootNamespace": "FlameAndBlame.Heli",
+    "references": ["Injection", "FlameAndBlame.Core", "Unity.InputSystem"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

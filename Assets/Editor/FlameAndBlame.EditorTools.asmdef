@@ -1,0 +1,14 @@
+{
+    "name": "FlameAndBlame.EditorTools",
+    "rootNamespace": "FlameAndBlame.EditorTools",
+    "references": ["Injection", "FlameAndBlame.Core", "FlameAndBlame.VFX", "FlameAndBlame.Heli", "FlameAndBlame.Fire", "FlameAndBlame.Rescue", "FlameAndBlame.GameRules", "FlameAndBlame.UI", "FlameAndBlame.Testing", "FlameAndBlame.Main"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

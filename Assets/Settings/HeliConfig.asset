@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6d2fa7335a0594949be78bd8e2ae2774, type: 3}
+  m_Name: HeliConfig
+  m_EditorClassIdentifier: 
+  maxHorizontalSpeed: 12
+  maxVerticalSpeed: 6
+  inputRiseTime: 0.6
+  inputFallTime: 0.9
+  velocityResponse: 1.5
+  maxAcceleration: 6
+  maxYawRate: 60
+  yawDriftTorque: 0.6
+  driftNoiseFrequency: 0.25
+  levelingStrength: 2
+  tiltVisualMaxDeg: 12
+  linearDrag: 0.3
+  angularDrag: 1.5
+  rigidbodyMass: 10

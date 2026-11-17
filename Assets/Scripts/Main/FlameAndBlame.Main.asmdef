@@ -1,0 +1,14 @@
+{
+    "name": "FlameAndBlame.Main",
+    "rootNamespace": "FlameAndBlame.Main",
+    "references": ["Injection", "FlameAndBlame.Core", "FlameAndBlame.VFX", "FlameAndBlame.Heli", "FlameAndBlame.Fire", "FlameAndBlame.Rescue", "FlameAndBlame.GameRules", "FlameAndBlame.UI", "FlameAndBlame.Testing"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,14 @@
+{
+    "name": "FlameAndBlame.GameRules",
+    "rootNamespace": "FlameAndBlame.GameRules",
+    "references": ["Injection", "FlameAndBlame.Core", "FlameAndBlame.Heli", "FlameAndBlame.Fire", "FlameAndBlame.Rescue"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
