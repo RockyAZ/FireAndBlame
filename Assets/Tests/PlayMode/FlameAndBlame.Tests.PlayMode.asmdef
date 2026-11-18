@@ -1,7 +1,7 @@
 {
     "name": "FlameAndBlame.Tests.PlayMode",
     "rootNamespace": "FlameAndBlame.Tests.PlayMode",
-    "references": ["Injection", "FlameAndBlame.Core", "FlameAndBlame.VFX", "FlameAndBlame.Heli", "FlameAndBlame.Fire", "FlameAndBlame.Rescue", "FlameAndBlame.GameRules", "FlameAndBlame.UI", "FlameAndBlame.Testing", "FlameAndBlame.Main", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+    "references": ["Injection", "FlameAndBlame.Core", "FlameAndBlame.VFX", "FlameAndBlame.Heli", "FlameAndBlame.Fire", "FlameAndBlame.Rescue", "FlameAndBlame.GameRules", "FlameAndBlame.UI", "FlameAndBlame.Testing", "FlameAndBlame.Main", "Unity.Cinemachine", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

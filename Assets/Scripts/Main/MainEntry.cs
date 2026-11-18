@@ -25,6 +25,7 @@ namespace FlameAndBlame.Main
 		[SerializeField] private PlayerControlSource playerControl;
 		[SerializeField] private HeliController heli;
 		[SerializeField] private Cup cup;
+		[SerializeField] private HeliCameraController heliCamera; // optional
 		[SerializeField] private HumansSystem humans;   // Phase 3
 		[SerializeField] private FireSystem fire;       // Phase 2
 		[SerializeField] private GameManager game;      // Phase 4
@@ -43,7 +44,12 @@ namespace FlameAndBlame.Main
 			Add(heliConfig, "heliConfig"); Add(cupConfig, "cupConfig"); Add(humanConfig, "humanConfig");
 			Add(fireConfig, "fireConfig"); Add(buildingConfig, "buildingConfig"); Add(gameRulesConfig, "gameRulesConfig");
 			Add(heli, "heli"); Add(cup, "cup"); Add(humans, "humans"); Add(fire, "fire"); Add(game, "game"); Add(hud, "hud");
-			if (playerControl != null) _ctx.InstallByType(playerControl, typeof(IControlSource));
+			Add(heliCamera, "heliCamera");
+			if (playerControl != null)
+			{
+				_ctx.InstallByType(playerControl, typeof(IControlSource));
+				_ctx.InstallByType(playerControl, typeof(ICameraInputSource));
+			}
 			else Debug.LogWarning("MainEntry: playerControl is not assigned, skipped.");
 			if (testMode != null) _ctx.Install(testMode);
 			_ctx.ApplyInstall();
@@ -52,6 +58,7 @@ namespace FlameAndBlame.Main
 			if (humans != null) humans.Initialize();
 			if (cup != null) cup.Initialize();
 			if (heli != null) heli.Initialize();
+			if (heliCamera != null) heliCamera.Initialize();
 			if (game != null) game.Initialize();
 			if (hud != null) hud.Initialize();
 			if (testMode != null) testMode.Initialize();

@@ -169,3 +169,10 @@ Full behaviour in GAME_DESIGN.md.
 - Config classes also hold extra fields listed in GAME_DESIGN.md section 7; `PoolConfig` is a [Serializable] class inside GameRulesConfig.
 - Layer interactions needed beyond the matrix above (triggers): Human x FireZone, Human x Water, Cup x Water, Cup x Human (grab zone), Water(drop) x FireZone/Building/Ground/Obstacle. WaterDrop uses layer Water.
 - GameManager: Won also requires at least one human in ChillingInPool, otherwise Lost.
+
+## Contract additions (Phase 2)
+- Core: `ICameraInputSource { Vector2 Look; float Zoom; }` (mouse delta pixels, scroll delta). Implemented by `PlayerControlSource` (also installed by type in MainEntry). `HeliCommand` unchanged.
+- Heli: asmdef also references `Unity.Cinemachine`. `HeliCameraController` ([Inject] HeliConfig, ICameraInputSource, HeliController; serialized `CinemachineCamera`; `Initialize()`; read-only `Yaw`, `Pitch`, `Distance`). Needs CinemachineOrbitalFollow + CinemachineRotationComposer on the CinemachineCamera and NO InputAxisController. Ignores input while heli is in test mode. MainEntry field `heliCamera` is optional; initialized after heli.
+- HeliConfig camera fields: cameraYawSensitivity, cameraPitchSensitivity, cameraMinPitch, cameraMaxPitch, cameraDefaultPitch, cameraMinDistance, cameraMaxDistance, cameraDefaultDistance, cameraZoomSpeed, cameraZoomSmoothTime, cameraFollowDamping.
+- Rescue: `PoolZone` has serialized `Cup cup` (the bowl is reparented at runtime, so it cannot be found from the collider). `RoofZone.OnFire`. `WaterDrop.Amount01`; prefab sphere trigger diameter 1 (Cup scales it to 2*dumpDropRadius).
+- Fire: `FireSideTrigger` (on the burn band child, serialized FireSide, forwards to ReportEnter/Stay). FireSide serialized `BoxCollider burnBand, waterCatch`; local X along the wall, local +Z outward, origin at wall base center.

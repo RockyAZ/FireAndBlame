@@ -1,6 +1,7 @@
 using FlameAndBlame.Core;
 using Injection;
 using Unity.Cinemachine;
+using Unity.Cinemachine.TargetTracking;
 using UnityEngine;
 
 namespace FlameAndBlame.Heli

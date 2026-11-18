@@ -52,9 +52,35 @@ Gate: compile clean (0 errors, 0 warnings), Main.unity plays with no errors (onl
 ### Known notes
 - The heli_smooth_accel margin is thin (0.119 vs 0.12). Raising `heliIsolationMassScale` or lowering the chain masses would widen it.
 - heli_yaw_drift depends on the random Perlin seed. Runs gave 1.2 to 25 deg over 10 s, and the test's 0.5 deg minimum could fail on a very quiet seed. Consider a fixed seed in test mode.
-- Build Settings still has SampleScene at index 0 (Main.unity is index 1). Remove it or reorder.
+- ~~Build Settings SampleScene at index 0~~: fixed in Phase 2 (SampleScene removed, Main.unity is index 0).
 - Cup.dropPrefab and MainEntry humans/fire/game/hud are empty until Phases 2 to 4.
 - The CLI rejects `--caller`/`--skill`. In Git Bash, use `MSYS_NO_PATHCONV=1` for hierarchy paths.
 
-## Phase 2: NEXT (pool, water, building, fire)
-Start with **P2-1 Pool and water** (gameplay-coder). See TASKS.md.
+## Phase 2: DONE (2026-11-17)
+
+Gate: compile clean (0 errors, 0 warnings), Main.unity plays with no errors (only the 3 expected MainEntry "humans/game/hud skipped" warnings), all 12 PlayMode tests PASS (7 FireWaterTests + 5 HeliTests). Two fix rounds were needed.
+
+### Done
+- **Camera**: package `com.unity.cinemachine` 3.1.4 added (pulls com.unity.splines 2.0.0). Core `ICameraInputSource { Vector2 Look; float Zoom; }`, implemented by `PlayerControlSource` (`<Mouse>/delta`, `<Mouse>/scroll/y`). `HeliCameraController` (Heli module, `[Inject]` HeliConfig, ICameraInputSource, HeliController) drives a `CinemachineCamera` with OrbitalFollow (Sphere, WorldSpace binding) + RotationComposer: mouse orbits yaw and pitch (clamped, above and below the heli), always looks at the heli, scroll zooms between min and max distance with smoothing. Input skipped in test mode. 11 `camera*` fields in HeliConfig. Scene: CinemachineBrain on Main Camera, `HeliCamera` object (no InputAxisController), MainEntry.heliCamera assigned, initialized after heli.
+- **P2-1 Pool and water**: `Cup.FillTick/Water01/WaterChanged/SetInPool/InPool`; `Cup.Tug` spawns `WaterDrop` (scaled to dumpDropRadius, inherits bowl velocity, destroyed after dropLifetime), empties the cup, then `ReleaseAll` (still a Phase 3 stub). `WaterDrop.Launch/ReportHit` extinguishes a FireSide (via parent chain) or a GroundFireZone, dies on pool/ground/building/obstacle; test mode = kinematic. `PoolZone` forwards Enter/Stay/Exit for tag Cup.
+- **P2-2 Fire**: `FireSide` per GAME_DESIGN section 4 (start delay, growth, extinguish threshold, pause `maxStopFireTime`, restart from 0, RoofOnFire + `ReachedTop` at the top, lost mode, `ApplyBuilding` sizes burn band and water catch). New `FireSideTrigger` forwards burn band child triggers to the FireSide. `FireSystem` initializes sides and ground zones, raises `AllSidesBurning` once. `GroundFireZone` kills IKillable; `Extinguish` only when not permanent.
+- **P2-3 RoofZone**: `OnFire` from FireSide.RoofOnFire, subscribed to `ReachedTop`. Human branches in PoolZone, RoofZone, GroundFireZone and FireSide are `// TODO Phase 3:` (contract calls only).
+- **P2-4 MainEntry**: optional `heliCamera`; PlayerControlSource also installed as `ICameraInputSource`. Contract additions for Phase 2 appended to CLAUDE.md.
+- **P2-5 Scene**: Building 12x12, 5 floors x 3.5 m, at origin; Side_N/E/S/W (FireSide, Wall on Building, BurnBand trigger FireZone/BuildingSide with FireSideTrigger, WaterCatch trigger FireZone). Roof (y 17.5) with RoofSlab and 4 RoofZones (FireZone/Roof, half-roof each, corners overlap). Pool at x=25 (PoolZone trigger 10x2.5x6, Water/Pool, raised basin with Obstacle walls). GroundFire: 4 strips covering all ground outside the pool + `GroundFire_Slab` 200x200 trigger at y=-3 for falls. FireSystem sides[4], groundZones[5]. `Assets/Prefabs/WaterDrop.prefab` (Water/WaterDrop, gravity, trigger r 0.5) on Cup.dropPrefab. Heli moved to (-25,10,0). Layers and tags read back from the scene YAML.
+- **P2-6 Tests** `Assets/Tests/PlayMode/FireWaterTests.cs`: `fill_in_pool` (4.02 s vs 4.00 expected), `dump_extinguishes_then_regrows`, `partial_water_no_effect`, `top_sets_roof_fire`, `lost_mode_ignores_water`, `tug_empties_cup`, `camera_follows_heli` PASS. FireSide components are disabled in tests; time moves only through `Advance(dt)`. Tests asmdef now references `Unity.Cinemachine`.
+
+### Fix rounds
+1. Compile: `BindingMode` lives in `Unity.Cinemachine.TargetTracking`; added the using in HeliCameraController.cs.
+2. Tests: `fill_in_pool` stalled at 0.9999991 because `Cup.SetWater` returned early on `Mathf.Approximately`; now an exact compare. `heli_smooth_accel` and `heli_yaw_drift` failed because the heli spawned at (0,10,0) inside the new building (Heli collides with Building); heli moved to (-25,10,0).
+
+### Known notes
+- Pool is a raised basin (Ground is one solid box). Say if a sunken pool with a hole in Ground is wanted.
+- RoofZone layout (four overlapping half-roof zones) is a scene-builder choice, not from the design.
+- `cameraZoomSpeed` 0.01 assumes ~120 scroll units per notch; tune in HeliConfig if zoom feels off.
+- PoolZone fills per Cup-tagged collider; only Bowl carries the tag (checked).
+- A side extinguished before its start delay goes straight into the pause; until it starts, `SidesNotOnFire` counts it.
+- Splines package logged a one-off TypeLoadException importing its own UXML right after install; it did not recur.
+- heli_smooth_accel margin still thin (0.1192 vs limit 0.127).
+
+## Phase 3: NEXT (humans)
+Start with **P3-1 Human and animator** (gameplay-coder). See TASKS.md.

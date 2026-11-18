@@ -214,7 +214,7 @@ namespace FlameAndBlame.Rescue
 		private void SetWater(float value)
 		{
 			value = Mathf.Clamp01(value);
-			if (Mathf.Approximately(value, Water01)) return;
+			if (value == Water01) return;
 			Water01 = value;
 			WaterChanged?.Invoke(Water01);
 		}
