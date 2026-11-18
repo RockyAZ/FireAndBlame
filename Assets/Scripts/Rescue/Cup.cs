@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using FlameAndBlame.Core;
+using FlameAndBlame.VFX;
 using Injection;
 using UnityEngine;
 
@@ -18,6 +19,9 @@ namespace FlameAndBlame.Rescue
 		[SerializeField] private Transform humanAnchor;
 		[Tooltip("Bowl Rigidbody, the last chain segment. Reparented to a runtime chain root in Initialize.")]
 		[SerializeField] private Rigidbody bowlBody;
+
+		[Tooltip("FillEffectView on the bowl renderer (M_Water), optional.")]
+		[SerializeField] private FillEffectView waterView;
 
 		private readonly List<Rigidbody> _segments = new List<Rigidbody>();
 		private readonly List<ConfigurableJoint> _joints = new List<ConfigurableJoint>();
@@ -48,6 +52,7 @@ namespace FlameAndBlame.Rescue
 				Debug.LogError("Cup: anchorBody and bowlBody must be assigned.", this);
 				return;
 			}
+			InitWaterView();
 			_chainRoot = new GameObject("CupChain");
 			_startLocal = anchorBody.transform.InverseTransformPoint(transform.position);
 			Vector3 start = transform.position;
@@ -78,6 +83,14 @@ namespace FlameAndBlame.Rescue
 				prevAnchor = Vector3.zero;
 			}
 			_ready = true;
+		}
+
+		private void InitWaterView()
+		{
+			if (waterView == null) return;
+			waterView.SmoothTime = _config.fillVisualSmoothTime;
+			waterView.SetFill(Water01);
+			WaterChanged += waterView.SetFill;
 		}
 
 		public void SetInPool(bool value) { InPool = value; }

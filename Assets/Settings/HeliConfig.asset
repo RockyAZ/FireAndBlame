@@ -26,3 +26,14 @@ MonoBehaviour:
   linearDrag: 0.3
   angularDrag: 1.5
   rigidbodyMass: 10
+  cameraYawSensitivity: 0.15
+  cameraPitchSensitivity: 0.15
+  cameraMinPitch: -30
+  cameraMaxPitch: 75
+  cameraDefaultPitch: 20
+  cameraMinDistance: 6
+  cameraMaxDistance: 30
+  cameraDefaultDistance: 15.5
+  cameraZoomSpeed: 0.61
+  cameraZoomSmoothTime: 0.08
+  cameraFollowDamping: 0.3

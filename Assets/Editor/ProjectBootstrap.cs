@@ -3,6 +3,7 @@ using FlameAndBlame.Fire;
 using FlameAndBlame.GameRules;
 using FlameAndBlame.Heli;
 using FlameAndBlame.Rescue;
+using FlameAndBlame.UI;
 using UnityEditor;
 using UnityEngine;
 
@@ -148,6 +149,7 @@ namespace FlameAndBlame.EditorTools
 			created += Create<FireConfig>();
 			created += Create<BuildingConfig>();
 			created += Create<GameRulesConfig>();
+			created += Create<UIConfig>();
 			return created;
 		}
 

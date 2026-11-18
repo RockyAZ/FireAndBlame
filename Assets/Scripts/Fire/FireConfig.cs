@@ -11,5 +11,6 @@ namespace FlameAndBlame.Fire
 		[Tooltip("Ground fire cannot be extinguished.")] public bool groundFirePermanent = true;
 		[Tooltip("Seconds per floor in lost mode [s].")] public float lostSpreadSecondsPerFloor = 3f;
 		[Tooltip("Delay before the fire starts [s].")] public float startDelaySeconds = 5f;
+		[Tooltip("Smoothing time of the roof fire visual [s]. Visual only.")] public float roofIgniteTime = 1.5f;
 	}
 }

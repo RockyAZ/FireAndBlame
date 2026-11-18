@@ -27,7 +27,7 @@ All gameplay variables live in ScriptableObjects. Interactions use physics: coll
 ## Decisions (added after review)
 - Human in state 2 or 4 is released into the pool with the F key: Tug releases the water and every human attached to the cup. Releasing over the pool puts the human in state 3 (rescued). Releasing over the roof puts the human back in state 1. Releasing over the ground fire kills the human.
 - If the cup touches a human in the pool while the cup is filling, the human becomes state 4 and is attached to the cup.
-- The helicopter continuously drifts in yaw (slow random torque). The player corrects it with Q and E. Pitch and roll level themselves weakly. The tail rotor and main rotor are crash hazards, so orientation matters near the building.
+- The helicopter continuously drifts in yaw (slow random torque). The player corrects it with Z (turn counterclockwise) and X (turn clockwise). Pitch and roll level themselves weakly. The tail rotor and main rotor are crash hazards, so orientation matters near the building.
 - Lose: a rotor hits anything except the cup or humans. The helicopter falls, every human dies, every building side burns to the top and can no longer be extinguished.
 - Win: no human is left in state 1, 2 or 4. All humans rescued gives the maximum score; some rescued gives a partial score. The final score is shown on a result panel.
 - Extra defaults: the game also ends (Lost) if all four sides reach the top.
@@ -41,6 +41,15 @@ All gameplay variables live in ScriptableObjects. Interactions use physics: coll
 - F drops the water as one physical ball. It spawns inside the tank, inherits the tank's velocity, and collides only with the building. A wall hit stops that side's fire for maxStopFireTime. A roof hit stops the side nearest to the hit. A ball that misses falls through everything else and disappears. The tank shows empty right after the drop.
 - Humans come only after fire, filling and dropping work in real play.
 
+## Decisions (Phase 4 movement)
+- WASD moves the helicopter relative to the camera, not to the helicopter's facing: W moves along the camera's view direction (flattened to horizontal), S moves back, A and D move to the camera's left and right.
+- Z turns the helicopter counterclockwise around its up axis, X turns it clockwise. Q and E are no longer used.
+
+## Decisions (Phase 4 roof slabs)
+- Each building side has its own roof slab: a rectangle on the roof, different sizes, no overlaps. When a side burns to the top, only its slab catches fire, and the fire covers that slab's top.
+- Water dropped on a side or on its slab puts out both the side and the slab.
+- Each slab has a box area on top where humans spawn at the start of the game.
+
 ## Architecture
 Module-based systems, each folder with its own text-written asmdef (references by name), wired by dependency injection from a single `MainEntry` GameObject. Full rules, module table and contract are in CLAUDE.md.
 
@@ -51,7 +60,7 @@ HumanConfig: maxStrength 100, accelerationThreshold 4, strengthLossFactor 6, str
 FireConfig: spreadSecondsPerFloor 12, maxStopFireTime 20, extinguishMinWater01 0.9, groundFirePermanent true, lostSpreadSecondsPerFloor 3.
 BuildingConfig: floors 5, floorHeight 3.5, footprint 12 x 12, roofHumanSpawnMargin 1.5.
 PoolConfig (inside GameRulesConfig): poolSize 10 x 2.5 x 6, distanceFromBuilding 14.
-FireConfig visuals: wallFireSmoothTime 0.4, roofIgniteTime 1.5.
+FireConfig visuals: wallFireSmoothTime 0.4, roofIgniteTime 1.5, roofFireHeight 1.5.
 CupConfig water ball and visuals: waterBallRadius 0.8, waterBallMass 20, waterBallLifetime 6, waterBallKillY -5, fillVisualSmoothTime 0.3.
-UIConfig: controlsHintText "WASD move | Space/Ctrl up/down | Q/E turn | F drop water | Mouse look | Wheel zoom", hintFontSize 22, hintMargin 20.
+UIConfig: controlsHintText "WASD move (camera) | Space/Ctrl up/down | Z/X turn | F drop water | Mouse look | Wheel zoom", hintFontSize 22, hintMargin 20.
 GameRulesConfig: scorePerRescued 100, penaltyPerDeath 25, bonusPerSideNotOnFire 25, endOnAllSidesBurning true.

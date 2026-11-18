@@ -94,7 +94,7 @@ Game
   Environment
     Ground
     Building              (Side_North/East/South/West: FireSide + burn trigger, tag BuildingSide)
-      Roof                (4 RoofZone triggers, one per side)
+      Roof                (RoofSlab_North/East/South/West: RoofSlab component, BoxCollider on Building, tag Roof; children RoofFire, HumanSpawnArea)
     Pool                  (PoolZone trigger on layer Water, tag Pool)
     GroundFire            (GroundFireZone triggers, tag GroundFire)
   Systems                 (FireSystem, HumansSystem, GameManager, HudController)
@@ -112,13 +112,13 @@ Configs (ScriptableObject, `[CreateAssetMenu]`, assets in Assets/Settings/, defa
 
 ```csharp
 // Core
-struct HeliCommand { Vector2 Move; float Vertical; float Yaw; bool TugPressed; }
+struct HeliCommand { Vector2 Move; Vector3 MoveWorld; float Vertical; float Yaw; bool TugPressed; }   // MoveWorld added in Phase 4
 interface IControlSource { HeliCommand Read(); }
 interface ITestModeAware { void EnterTestMode(); void ExitTestMode(); }
 interface IKillable { void Kill(); }
 
 // Heli      (all systems below have Initialize(), called by MainEntry)
-class PlayerControlSource : MonoBehaviour, IControlSource   // WASD Move, Space/LeftCtrl Vertical, Q/E Yaw, F Tug; InputActions created in code
+class PlayerControlSource : MonoBehaviour, IControlSource   // WASD Move (camera-relative, see Phase 4), Space/LeftCtrl Vertical, Z/X Yaw, F Tug; InputActions created in code
 class HeliController : MonoBehaviour, ITestModeAware        // [Inject] HeliConfig, IControlSource
     Rigidbody Body; void SetControlSource(IControlSource s); void Crash(); bool IsCrashed; event Action Crashed;
 class RotorHazard : MonoBehaviour   // Rotors layer; collision/trigger -> ReportHit(Collider other): ignores Cup and Human, else HeliController.Crash()
@@ -188,10 +188,33 @@ Full behaviour in GAME_DESIGN.md.
 - Rescue: the cup bowl renderer uses `M_Water` and a `FillEffectView`. `Cup` serialized `FillEffectView waterView`, calls `SetFill(Water01)` from `WaterChanged`, smoothing `CupConfig.fillVisualSmoothTime`. The pool water surface uses `M_Water` with `_Fill` 1.
 - UI: `UIConfig` ScriptableObject (seventh config asset, created by ProjectBootstrap): `controlsHintText`, `hintFontSize`, `hintMargin`. `ControlsHintView : MonoBehaviour` (UI module, `[Inject] UIConfig`, `Initialize()`) shows the text in a TextMeshProUGUI anchored to the top-right corner. If TMP Essential Resources are missing and cannot be imported through an Editor command, use `UnityEngine.UI.Text` with the built-in `LegacyRuntime.ttf` and report it. MainEntry gets serialized `UIConfig uiConfig` and `ControlsHintView controlsHint`; HudController stays optional.
 
-## Contract additions (Phase 4: physical water ball)
+## Contract additions (Phase 4 water ball: already implemented, kept for reference)
 - `WaterDrop` keeps its name and tag but becomes a solid ball: SphereCollider (not a trigger), dynamic Rigidbody with gravity, layer `WaterBall` (16). Collision matrix: WaterBall collides with Building ONLY (ProjectBootstrap sets this). It passes through ground, pool, cup, heli and humans.
 - `Cup.Tug()`: if Water01 > emptyThreshold, spawn one ball at the bowl center with radius `CupConfig.waterBallRadius`, mass `CupConfig.waterBallMass`, `linearVelocity` = bowl Rigidbody `linearVelocity` (inherited momentum), angular velocity = bowl angular velocity. Then set Water01 to 0 at once (the view drains visually through its smoothing) and call `ReleaseAll()`.
 - `WaterDrop.Launch(float amount01, Vector3 velocity, Vector3 angularVelocity)`; `void ReportHit(Collider other, Vector3 point)` called from OnCollisionEnter with the first contact point. Hit on a wall (parent chain has a FireSide): `FireSide.Extinguish(amount01)`. Hit on the roof slab: extinguish the side whose roof sector contains the point (nearest roof edge). Destroy after the first hit, after `CupConfig.waterBallLifetime`, or below `CupConfig.waterBallKillY`. Fires `event Action<WaterDrop, FireSide> Hit` (null side if none).
 - Extinguish resets `Height01` to 0, starts the pause (`maxStopFireTime`), clears RoofOnFire, so the wall and roof shaders fall back through FillEffectView smoothing. `WaterCatch` triggers are no longer used by water; scene-builder disables them.
 - Test mode: the ball stays dynamic (it collides with static building colliders). Tests may also call `ReportHit` directly.
+
+## Contract additions (Phase 4: roof slabs). These replace RoofZone and RoofSectorMesh everywhere above.
+- Scene: the four sides are instances of one `Building_Side` prefab. Under `Roof` there are four hand-made, non-overlapping `RoofSlab` boxes of different sizes, one per side. Keep their sizes.
+- `RoofSectorMesh` is deleted. `RoofZone` is deleted; read `RoofSlab` wherever the contract says RoofZone.
+- Fire module: `RoofSlab : MonoBehaviour, on the RoofSlab object` (non-trigger BoxCollider, layer Building, tag Roof).
+  - Serialized: `FireSide fireSide`, `FillEffectView roofFireView` (on the RoofFire child), `Transform humanSpawnArea`.
+  - `void Initialize(FireConfig fire, BuildingConfig building)`, called by FireSystem. It sizes and places the RoofFire child to cover the slab's top face exactly (X and Z from the slab's BoxCollider, height `FireConfig.roofFireHeight`, bottom 0.01 m above the top face), and sizes `humanSpawnArea` as a box on the top face inset by `BuildingConfig.roofHumanSpawnMargin` on every edge, with a small height (0.1). It sets `roofFireView.SmoothTime = roofIgniteTime`.
+  - `FireSide FireSide; bool OnFire;` OnFire follows `fireSide.RoofOnFire` (set when the side reaches the top, cleared by Extinguish). Drives `roofFireView.SetFill(OnFire ? 1 : 0)`.
+  - `void ReportStay(Collider other)`: while OnFire, an `IKillable` touching the slab's top area is killed. A child trigger box over the top face (height 2 m, layer FireZone) forwards to it, so the slab's solid collider stays solid.
+  - `Bounds SpawnBounds; Vector3 GetSpawnPoint()` returns a random point on the bottom of the spawn box, in world space. Draws the spawn box with `OnDrawGizmos`.
+  - `RoofFire` child: plain box, no collider, `M_Fire`, `FillEffectView`. It only renders.
+- `FireSystem`: serialized `RoofSlab[] roofSlabs`, initializes them, exposes `IReadOnlyList<RoofSlab> RoofSlabs` (HumansSystem uses it in Phase 5 for spawning).
+- `WaterDrop.ReportHit`: a hit on a collider whose parent chain has a `RoofSlab` extinguishes `RoofSlab.FireSide` (this replaces "nearest roof edge").
+- `FireConfig.roofFireHeight` default 1.5.
+- Phase 5 human rules that mentioned RoofZone use RoofSlab: a released human landing on a slab becomes WaitingOnRoof; a human on a burning slab dies.
+
+## Contract additions (Phase 4: camera-relative movement and Z/X turning)
+- `HeliCommand.MoveWorld`: the horizontal move direction in world space (y = 0, magnitude 0..1). `Move` stays the raw WASD vector (x = A/D, y = W/S) for debugging. HeliController moves along `MoveWorld` only, never relative to its own yaw.
+- `PlayerControlSource` has a serialized `Transform cameraTransform` (the Main Camera that the CinemachineBrain drives). Each Read(): forward = camera forward projected on the horizontal plane and normalized; right = camera right projected and normalized. If forward is near zero (camera looking straight down), use the projected camera up. `MoveWorld = ClampMagnitude(forward * Move.y + right * Move.x, 1)`. If cameraTransform is null, use world Z as forward and world X as right, and log one warning.
+- Turning keys: Z = Yaw -1 (counterclockwise seen from above), X = Yaw +1 (clockwise seen from above). Q and E are removed. Yaw drift stays.
+- `ScriptedControlSource`: tests set `MoveWorld` directly. If only `Move` is set, it maps x to world X and y to world Z.
+- Input smoothing (inputRiseTime, inputFallTime) applies to MoveWorld in world space. The camera orbit stays in world space, so turning the heli does not turn the camera or change the move direction.
+- UIConfig default `controlsHintText`: "WASD move (camera) | Space/Ctrl up/down | Z/X turn | F drop water | Mouse look | Wheel zoom".
 

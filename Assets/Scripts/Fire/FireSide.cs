@@ -1,5 +1,6 @@
 using System;
 using FlameAndBlame.Core;
+using FlameAndBlame.VFX;
 using UnityEngine;
 
 namespace FlameAndBlame.Fire
@@ -16,9 +17,15 @@ namespace FlameAndBlame.Fire
 		[Tooltip("Trigger box, layer FireZone. Resized to the full building height.")]
 		[SerializeField] private BoxCollider waterCatch;
 
+		[Tooltip("FillEffectView on the FireOverlay child (optional).")]
+		[SerializeField] private FillEffectView wallFireView;
+
 		private FireConfig _config;
 		private BuildingConfig _building;
 		private float _delayLeft;
+
+		public FireConfig Config => _config;
+		public BuildingConfig Building => _building;
 
 		public Side Side => side;
 		public float Height01 { get; private set; }
@@ -58,6 +65,19 @@ namespace FlameAndBlame.Fire
 
 		/// <summary>Fire clock: start delay, pause countdown and restart, growth, reaching the top.</summary>
 		public void Advance(float dt)
+		{
+			Step(dt);
+			UpdateView();
+		}
+
+		private void UpdateView()
+		{
+			if (wallFireView == null) return;
+			wallFireView.SetFill(Height01);
+			wallFireView.SetIntensity(IsBurning ? 1f : 0f);
+		}
+
+		private void Step(float dt)
 		{
 			if (_config == null || _building == null) return;
 			if (_delayLeft > 0f)

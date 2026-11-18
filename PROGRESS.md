@@ -85,5 +85,31 @@ Gate: compile clean (0 errors, 0 warnings), Main.unity plays with no errors (onl
 ## Plan change (2026-11-18)
 Two phases were inserted before humans (see PHASES.md). Old Phase 3 (humans) is now Phase 5, old Phase 4 (rules and UI) is Phase 6, old Phase 5 (effects) is Phase 7. TASKS.md still uses the old numbers until the Phase 3 game-designer step renumbers it.
 
-## Phase 3: NEXT (fire and water visuals, pool filling in real play, controls hint)
-Start with the game-designer step in PHASES.md, Phase 3.
+## Phase 3: DONE (2026-11-18), pending your by-eye Play mode check
+Fire and water visuals, pool filling in real play, controls hint.
+
+Gate: compile clean (0 errors, 0 warnings in project assemblies), all 16 PlayMode tests PASS (4 new VisualsTests + 7 FireWaterTests + 5 HeliTests), test mode OFF for the new tests. No fix rounds were needed. The by-eye part of the gate (walls visibly burn, roof sector lights, tank turns blue, hint visible) is still to be confirmed by you in Play mode.
+
+### Done
+- **Design**: GAME_DESIGN.md section 9 "Visuals and controls hint", section 10 "Fire and water ball (Phase 4)", new config fields in section 7. TASKS.md renumbered (humans = 5, rules/UI = 6, effects = 7) with new task lists P3-1..P3-10 and P4-1..P4-7.
+- **Shader** `Assets/Shaders/FillEffect.shader` (`FlameAndBlame/FillEffect`): hand-written HLSL, URP Unlit, Transparent, Cull Off, all 10 properties in `UnityPerMaterial` (SRP Batcher). Guarded Y normalization; noise fades out at `_Fill` 0 and 1, so 0 shows nothing and 1 is full. Alpha multiplied by `_Intensity`.
+- **Materials** `Assets/VFX/M_Fire.mat` (orange fill, yellow edge, base alpha 0), `M_Water.mat` (blue, base light grey alpha 0.3, `_Fill` 1). Created via Unity CLI.
+- **VFX**: `FillEffectView` (MaterialPropertyBlock only, SmoothDamp, `_MinY/_MaxY` from mesh bounds, `RefreshBounds()`, read-only `CurrentFill/TargetFill/CurrentIntensity`, serialized `initialFill/initialIntensity`). `RoofSectorMesh` (serialized `side`, `sizeX`, `sizeZ`, `centerRise` 0.3; `Initialize(float, float)`).
+- **UI**: `UIConfig` (controlsHintText, hintFontSize 22, hintMargin (20,20)); asset created by ProjectBootstrap (`assets=1` on that run). `ControlsHintView` (`[Inject] UIConfig`, `Initialize()`, `ShownText`, uses `tmpText` if assigned, else `legacyText`; anchors top-right).
+- **Gameplay wiring**: FireSide `wallFireView` (SetFill(Height01), SetIntensity(IsBurning); updated in Update and at the end of `Advance`), read-only `Config`, `Building`. RoofZone `roofFireView`, `roofSector`, `Refresh()` (lazy one-time setup: SmoothTime = roofIgniteTime, sector sized from `FireSide.Building`). Cup `waterView` (SmoothTime = fillVisualSmoothTime, follows WaterChanged). FireConfig `roofIgniteTime` 1.5, CupConfig `fillVisualSmoothTime` 0.25. MainEntry `uiConfig`, `controlsHint` (initialized after hud, before testMode).
+- **Scene**: `FireOverlay` on each side (cube, no collider, local (0, 8.75, 0.06), scale (12, 17.5, 0.02), M_Fire, SmoothTime 0.1). `RoofFire_North/East/South/West` under Roof at roof-local (0, 0.55, 0) (M_Fire, SmoothTime 1.5). Bowl uses M_Water + FillEffectView. New `Pool/PoolSurface` (top at y 2.8, 9.4 x 5.4, M_Water, fill 1). `Game/UI/Canvas` (Screen Space Overlay, scaler 1920x1080) with `ControlsHint` (legacy Text, built-in font, 500x300, top-right, -20,-20). All new fields read back non-null.
+- **Tests** `Assets/Tests/PlayMode/VisualsTests.cs` (test mode OFF): `wall_overlay_follows_height` (overlay `_Fill` within 0.002 of Height01 at 4 heights, all sides), `roof_sector_only_own_side` (North 0.990, others 0.000), `tank_fills_in_pool_scripted` (Water01 0.01 → 0.51, Bowl `_Fill` 0.005 → 0.448), `controls_hint_matches_config` PASS. Tests asmdef now also references `Unity.TextMeshPro` and `UnityEngine.UI`.
+
+### Deviations from the contract wording (additive, CLAUDE.md not edited)
+- `RoofSectorMesh` takes floats (`Initialize(float sizeX, float sizeZ)`), not `BuildingConfig`: VFX cannot reference Fire. RoofZone passes `FireSide.Building` values.
+- New read-only `FireSide.Config` / `FireSide.Building`, `RoofZone.Refresh()`, `RoofZone.roofSector`, `FillEffectView.RefreshBounds/CurrentFill/TargetFill/CurrentIntensity`, `ControlsHintView.ShownText/legacyText/tmpText`. Consider adding these to the CLAUDE.md contract.
+
+### Known notes
+- TMP Essential Resources are not imported, so the hint uses `UnityEngine.UI.Text` with the built-in default font (fileID 10102, the LegacyRuntime font; the CLI could not confirm it by name).
+- `tank_fills_in_pool_scripted` teleports the heli and chain to (25,10,0), lets the bowl settle, then descends with ScriptedControlSource Vertical = -1 (it does not fly the 50 m from spawn).
+- The roof sector rises 0.3 m toward the roof centre (fire spreads from the wall edge inward); the sector mesh uses HideAndDontSave, so it may not show in Edit mode after a scene reload until Play.
+- `dumpDropRadius`/`dropLifetime` stay in CupConfig until Phase 4 replaces the drop with the ball.
+- The CLI accepts `--caller/--skill` on `unity command` but not on `unity status`/test calls in this version.
+
+## Phase 4: NEXT (roof slabs)
+Plan change (2026-11-18): the user reports that the water ball drop already works, so Phase 4 is now the roof slab rework (see PHASES.md and "Contract additions (Phase 4: roof slabs)" in CLAUDE.md). The user built Building_Side prefab instances and four RoofSlab boxes by hand; keep them. Phase 4 also changes heli movement: WASD relative to the camera, Z/X turn (Q/E removed). This replaces the Phase 0 decision "Move input is relative to the heli's yaw". Start with the game-designer step in PHASES.md, Phase 4.

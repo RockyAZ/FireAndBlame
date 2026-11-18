@@ -40,6 +40,7 @@ On MainRotor and TailRotor (layer Rotors, tag Rotor), non-trigger collider. `OnC
 - Human slots: attached humans are placed at `HumanAnchor` offset by `humanSlotSpacing` (slot 0 left, 1 right).
 
 ### WaterDrop (Rescue)
+NOTE: replaced in Phase 4 by the solid ball in section 10. The text below describes the Phase 2 trigger drop.
 Prefab: Rigidbody (gravity), SphereCollider trigger, layer Water, tag WaterDrop. `Launch(amount01, v)` stores amount, sets velocity = v. `OnTriggerEnter` forwards to `ReportHit(Collider)`: if other has a FireSide (parent of the water catch trigger) -> `FireSide.Extinguish(amount01)` then destroy; if other is GroundFireZone and `groundFirePermanent` false -> `GroundFireZone.Extinguish(amount01)`; on Ground, Building, Obstacle, PoolZone -> destroy (splash VFX in Phase 5). Lifetime is capped by the Cup (`dropLifetime`).
 
 ### Human (Rescue)
@@ -193,11 +194,13 @@ Unit in brackets. All fields public/serialized on a ScriptableObject in Assets/S
 
 HeliConfig: maxHorizontalSpeed 12 [m/s]; maxVerticalSpeed 6 [m/s]; inputRiseTime 0.6 [s]; inputFallTime 0.9 [s]; velocityResponse 1.5 [1/s]; maxAcceleration 6 [m/s^2]; maxYawRate 60 [deg/s]; yawDriftTorque 0.6 [rad/s^2]; driftNoiseFrequency 0.25 [Hz]; levelingStrength 2 [1/s^2]; tiltVisualMaxDeg 12 [deg]; linearDrag 0.3; angularDrag 1.5; rigidbodyMass 10 [kg].
 
-CupConfig: capacity 100 [units]; fillRatePerSecond 25 [units/s]; emptyThreshold 0.05 [01]; fullThreshold 0.95 [01]; maxHumans 2; segmentCount 3; segmentLength 2 [m]; jointAngularLimitDeg 40 [deg]; jointSpring 50; jointDamper 8; grabZoneRadius 1.2 [m]; dumpDropRadius 1.5 [m]; bumpImpulse 4 [N s]; (new) bumpUpBias 0.5 [01]; regrabCooldown 1 [s]; humanSlotSpacing 0.8 [m]; bowlMass 2 [kg]; segmentMass 0.5 [kg]; accelerationSmoothing 0.1 [s]; dropLifetime 6 [s].
+CupConfig: capacity 100 [units]; fillRatePerSecond 25 [units/s]; emptyThreshold 0.05 [01]; fullThreshold 0.95 [01]; maxHumans 2; segmentCount 3; segmentLength 2 [m]; jointAngularLimitDeg 40 [deg]; jointSpring 50; jointDamper 8; grabZoneRadius 1.2 [m]; dumpDropRadius 1.5 [m]; bumpImpulse 4 [N s]; (new) bumpUpBias 0.5 [01]; regrabCooldown 1 [s]; humanSlotSpacing 0.8 [m]; bowlMass 2 [kg]; segmentMass 0.5 [kg]; accelerationSmoothing 0.1 [s]; dropLifetime 6 [s, legacy trigger drop, replaced by waterBallLifetime in Phase 4]; (new, Phase 3) fillVisualSmoothTime 0.25 [s, smoothing of the tank water shader fill]; (new, Phase 4, section 10) waterBallRadius 0.6 [m]; waterBallMass 5 [kg]; waterBallLifetime 8 [s]; waterBallKillY -20 [m, world Y].
 
 HumanConfig: maxStrength 100; accelerationThreshold 4 [m/s^2]; strengthLossFactor 6 [strength per m/s^2 over threshold per s]; strengthRecoveryPerSecond 3; stunDuration 2.5 [s]; humanCount 4; animator trigger names (strings) triggerWaitingOnRoof "WaitingOnRoof", triggerRescuedHanging "RescuedHanging", triggerChillingInPool "ChillingInPool", triggerSwimmingInTank "SwimmingInTank", triggerDead "Dead"; (new) poolDrag 4; detachDownSpeed 1 [m/s].
 
-FireConfig: spreadSecondsPerFloor 12 [s]; maxStopFireTime 20 [s]; extinguishMinWater01 0.9 [01]; groundFirePermanent true; lostSpreadSecondsPerFloor 3 [s]; (new) startDelaySeconds 5 [s].
+FireConfig: spreadSecondsPerFloor 12 [s]; maxStopFireTime 20 [s]; extinguishMinWater01 0.9 [01]; groundFirePermanent true; lostSpreadSecondsPerFloor 3 [s]; (new) startDelaySeconds 5 [s]; (new, Phase 3) roofIgniteTime 1.5 [s, smoothing time of the roof fire shader fill, visual only].
+
+UIConfig (new, Phase 3, seventh asset, lives in the UI module): controlsHintText (multi-line string, default below); hintFontSize 22 [px]; hintMargin (20, 20) [px, from the top-right corner]. Default controlsHintText: "WASD  move\nSpace / Left Ctrl  up / down\nQ / E  turn\nF  drop water / release\nMouse  orbit camera\nScroll  zoom".
 
 BuildingConfig: floors 5; floorHeight 3.5 [m]; footprintX 12, footprintZ 12 [m]; roofHumanSpawnMargin 1.5 [m]; (new) burnTriggerDepth 1.5 [m].
 
@@ -230,3 +233,57 @@ Dependency check (all fine, no upward reference):
 - GameRules references Heli (crash event), Fire, Rescue; none of them know GameRules. UI reads Rescue and GameRules only through events.
 - Testing and Main are referenced by nobody.
 - Closest risk: `PoolConfig` lives in GameRules but nothing below uses it (only the scene-builder). Keep it that way.
+- Phase 3: `FillEffectView` and `RoofSectorMesh` live in VFX (references Injection, Core only). `RoofSectorMesh` needs `BuildingConfig`, which lives in Fire (above VFX), so it cannot reference it despite the contract wording "BuildingConfig passed in". Implementation rule: `RoofSectorMesh` holds serialized floats `footprintX`, `footprintZ` (defaults 12, 12) and `Initialize(float footprintX, float footprintZ)`; the scene-builder copies the values from BuildingConfig (or FireSystem pushes them). Flagged as an open point in the report. Fire and Rescue may reference VFX (already in the table). `UIConfig` and `ControlsHintView` live in UI (references Core, UnityEngine.UI, TextMeshPro); `UIConfig` is installed in MainEntry like any other config.
+
+## 9. Visuals and controls hint (Phase 3)
+Visual only. No gameplay number is read from a material; gameplay stays in the ScriptableObjects. Visuals follow gameplay state through events or per-frame setters, never the other way.
+
+### FillEffect shader
+File `Assets/Shaders/FillEffect.shader`, hand-written URP Unlit HLSL, Transparent queue, alpha blending, ZWrite off, no Shader Graph. One shader serves wall fire, roof fire, tank water and pool water.
+Properties: `_Fill` (0..1, how much of the object is filled from the bottom), `_Intensity` (0..1, multiplies the filled alpha; 0 hides the fill, used for "paused" fire), `_FillColor`, `_EdgeColor` (glow band at the fill line), `_BaseColor` (color of the part above the fill line; alpha 0 for fire overlays, light grey semi-transparent for water), `_EdgeWidth` (band width in normalized Y), `_NoiseScale`, `_NoiseSpeed`, `_MinY`, `_MaxY` (object-space Y range the fill runs over, set per renderer by `FillEffectView`).
+Fill line: per pixel, `y01 = saturate((objectY - _MinY) / (_MaxY - _MinY))`. A cheap value noise of (object XZ * `_NoiseScale`, time * `_NoiseSpeed`) is sampled in -0.5..0.5 and added to `_Fill` near the edge only: `line = _Fill + noise * _EdgeWidth * edgeMask`, where `edgeMask` is 1 at the edge and 0 for `_Fill` of exactly 0 or 1 so empty and full are clean. The pixel is filled when `y01 < line`. Inside the edge band (`line - _EdgeWidth < y01 < line`) the color blends to `_EdgeColor`, so the top flickers like flames. Filled pixels use `_FillColor` with alpha scaled by `_Intensity`; unfilled pixels use `_BaseColor`. Fully clipped when both alphas are 0.
+
+### Materials (Assets/VFX/)
+- `M_Fire`: `_FillColor` orange, `_EdgeColor` yellow, `_BaseColor` alpha 0 (invisible above the flame line), `_EdgeWidth` 0.08, `_NoiseScale` 4, `_NoiseSpeed` 2.
+- `M_Water`: `_FillColor` blue (alpha about 0.7), `_EdgeColor` lighter blue, `_BaseColor` light grey, semi-transparent, `_EdgeWidth` 0.03, low noise scale and speed (calm surface).
+These are look values; the artist may tune them freely.
+
+### FillEffectView (VFX)
+`[RequireComponent(typeof(Renderer))]`. Public: `SetFill(float fill01)`, `SetIntensity(float intensity01)`, serialized `float SmoothTime`. It stores targets, and each frame moves current values toward them with `Mathf.SmoothDamp` (smoothTime = `SmoothTime`; 0 means jump). This per-frame smoothing is presentation only and reads no gameplay distances. It writes through a `MaterialPropertyBlock` (`GetPropertyBlock`, `SetFloat`, `SetPropertyBlock`); it never touches `renderer.material`, so all views share the same material asset. In Awake it reads `renderer.localBounds` (mesh bounds in object space) and sets `_MinY` and `_MaxY` once. It only writes the block when a value changed. Tests read the same block with `Renderer.GetPropertyBlock` and check `_Fill` and `_Intensity` (the displayed, smoothed values, so tests wait or use SmoothTime 0).
+
+### RoofSectorMesh (VFX)
+Builds one triangle mesh in Awake and OnValidate. Vertices: the roof center C, and the two roof corners belonging to its `Side` (North: (-x,+z) and (+x,+z) corners; East: (+x,+z) and (+x,-z); South: (+x,-z) and (-x,-z); West: (-x,-z) and (-x,+z), with x = footprintX/2, z = footprintZ/2, relative to the roof center). The four triangles share only edges from C to the corners, so they tile the roof without overlapping. Because `FillEffect` fills along object Y, the triangle is built slightly tilted: the two corner vertices (wall edge) at Y 0, the center vertex at Y `centerRise` (0.3). `FillEffectView` then gets `_MinY` 0 and `_MaxY` 0.3 from the bounds, and rising `_Fill` spreads the fire from the burning wall's edge inward to the center. Fields are named `sizeX`, `sizeZ` in code (`Initialize(float sizeX, float sizeZ)`), called by RoofZone from `FireSide.Building`. `_Fill` 0 shows nothing. Positioned 0.05 m above the slab, no collider, material `M_Fire`.
+
+### Wiring
+- `FireSide.wallFireView` (serialized `FillEffectView` on `FireOverlay`): every frame in Update (view, not logic) `SetFill(Height01)` and `SetIntensity(IsBurning ? 1 : 0)`. So the flame climbs with the fire, fades while paused after an extinguish (Height01 is 0 then anyway) and in lost mode stays at full. `FireOverlay` is a thin box or quad 0.05 m outside the wall (local +Z), full building height, no collider, `M_Fire`. Its `SmoothTime` is small (0.1 s).
+- `RoofZone.roofFireView` (on `RoofFire_<Side>`): driven by `FireSide.RoofOnFire`: in its Update (presentation only, one bool read, no distance polling) `SetFill(OnFire ? 1 : 0)`. Set that view's `SmoothTime = FireConfig.roofIgniteTime` once in Initialize/OnEnable from FireSystem (RoofZone has no injection: `FireSystem.Initialize` passes `roofIgniteTime` through `RoofZone.SetIgniteTime(float)`; this is an addition listed in the report). Only the sector of the side that reached the top lights up.
+- `Cup.waterView` (on the bowl renderer, material `M_Water`): `Cup.Initialize` sets `SmoothTime = CupConfig.fillVisualSmoothTime` and subscribes to `WaterChanged`, calling `SetFill(Water01)`. Tug sets Water01 = 0 at once and the view drains through its smoothing. `_BaseColor` of `M_Water` shows the empty part of the tank as pale grey, so an empty tank is readable.
+- Pool surface: the water plane or slab uses `M_Water` with `_Fill` 1 (set statically in a FillEffectView with `SetFill(1)` and SmoothTime 0, or a material property block set by the scene-builder). No logic.
+
+### UIConfig and ControlsHintView (UI)
+`UIConfig` fields and defaults in section 7. The text lists the real controls, taken from `PlayerControlSource` and the camera: WASD move, Space up, Left Ctrl down, Q/E yaw, F tug (drops water and releases humans), mouse orbit camera, scroll zoom.
+`ControlsHintView : MonoBehaviour` (`[Inject] UIConfig`, `Initialize()` called by MainEntry after `hud`): finds or creates (serialized) a text component on the Canvas, sets text = `controlsHintText`, font size = `hintFontSize`, anchors it to the top-right corner (anchor and pivot (1,1), anchoredPosition (-margin.x, -margin.y)), right aligned, no raycast target. Uses `TextMeshProUGUI` when TMP Essential Resources exist. If not and they cannot be imported by an Editor command (`TMP_PackageResourceImporter`/menu), fall back to `UnityEngine.UI.Text` with `Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")`, and report it. HudController stays optional; `ControlsHintView` does not depend on it.
+
+## 10. Fire and water ball (Phase 4)
+Replaces the Phase 2 trigger drop. The water is a real physical object.
+
+### WaterDrop (solid ball)
+- Prefab: `SphereCollider` (not a trigger, diameter 1, scaled by the Cup), dynamic `Rigidbody` with gravity, layer `WaterBall` (16), tag `WaterDrop`, `M_Water` renderer. The collision matrix (set by ProjectBootstrap) makes WaterBall collide with Building ONLY: it passes through ground, pool, cup, heli, humans and all other layers (so a miss simply falls on through the ground until the kill rules remove it).
+- `Launch(float amount01, Vector3 velocity, Vector3 angularVelocity)`: stores Amount01, sets `linearVelocity` and `angularVelocity`.
+- `OnCollisionEnter(Collision c)` forwards to `ReportHit(c.collider, c.GetContact(0).point)`.
+- `ReportHit(Collider other, Vector3 point)`, first call only (a `_spent` flag):
+  - If `other` has a `FireSide` in its parent chain (`GetComponentInParent`, a wall): `FireSide.Extinguish(Amount01)`.
+  - Else if `other` is the roof slab (tag Roof or has a RoofZone/Roof parent): extinguish the side whose roof sector contains `point`. The four sectors are triangles from the roof center, so the containing sector is found by comparing the point's offset from the roof center: nearest roof edge = the side whose outward axis has the largest dot with the offset (|x| vs |z| comparison, one-time math at the hit, not polling). Then `FireSide.Extinguish(Amount01)` on that side (the Roof object holds the four FireSide refs through its RoofZones).
+  - Any other Building collider (no FireSide): no extinguish.
+  - Then fires `Hit(this, side)` (side null if none) and destroys the ball.
+- `Extinguish` requires `Amount01 >= extinguishMinWater01` (unchanged). A partly filled tank makes a ball that destroys itself without effect. Success sets `Height01 = 0`, starts the pause (`maxStopFireTime`), and clears `RoofOnFire`, so `FillEffectView` smoothing drops both the wall overlay and the roof sector.
+- Destroy rules (each by its own mechanism, no polling beyond one check): after the first hit; `Destroy(gameObject, waterBallLifetime)` set in Launch; and below `waterBallKillY` (one `FixedUpdate` compare of `transform.position.y` with the config value, the only per-frame check, which is not a distance poll between objects).
+- Event: `event Action<WaterDrop, FireSide> Hit`. Phase 7 splash VFX will subscribe.
+- `WaterCatch` triggers on the FireSides are no longer used by water. Scene-builder disables the colliders. `FireSide` keeps the field.
+- Test mode: the ball stays dynamic (it collides with static building colliders, which still work against dynamic bodies). Tests may also call `ReportHit(collider, point)` directly.
+
+### Cup.Tug (Phase 4)
+If `Water01 > emptyThreshold`: instantiate `dropPrefab` at the bowl center (inside the tank), set scale to diameter `2*waterBallRadius`, set `Rigidbody.mass = waterBallMass`, call `Launch(Water01, Body.linearVelocity, Body.angularVelocity)`. The ball inherits the bowl's momentum so a drop made in flight travels on. Then `Water01 = 0` immediately (fires `WaterChanged`; the view drains through `fillVisualSmoothTime`), then `ReleaseAll()`. The ball ignores the cup by layer, so it falls through the tank. Tug on an empty or partly filled-below-threshold tank only releases humans. A tank filled between `emptyThreshold` and `extinguishMinWater01` still empties but the ball extinguishes nothing.
+
+### Config fields (Phase 4)
+CupConfig: waterBallRadius 0.6 [m], waterBallMass 5 [kg], waterBallLifetime 8 [s], waterBallKillY -20 [m]. They supersede `dumpDropRadius` and `dropLifetime` (kept for compatibility, unused after Phase 4).

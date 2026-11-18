@@ -20,6 +20,7 @@ namespace FlameAndBlame.Main
 		[SerializeField] private FireConfig fireConfig;
 		[SerializeField] private BuildingConfig buildingConfig;
 		[SerializeField] private GameRulesConfig gameRulesConfig;
+		[SerializeField] private UIConfig uiConfig;     // optional
 
 		[Header("Systems")]
 		[SerializeField] private PlayerControlSource playerControl;
@@ -30,6 +31,7 @@ namespace FlameAndBlame.Main
 		[SerializeField] private FireSystem fire;       // Phase 2
 		[SerializeField] private GameManager game;      // Phase 4
 		[SerializeField] private HudController hud;     // Phase 4
+		[SerializeField] private ControlsHintView controlsHint; // optional
 		[SerializeField] private TestModeController testMode; // optional
 
 		private Context _ctx;
@@ -44,7 +46,7 @@ namespace FlameAndBlame.Main
 			Add(heliConfig, "heliConfig"); Add(cupConfig, "cupConfig"); Add(humanConfig, "humanConfig");
 			Add(fireConfig, "fireConfig"); Add(buildingConfig, "buildingConfig"); Add(gameRulesConfig, "gameRulesConfig");
 			Add(heli, "heli"); Add(cup, "cup"); Add(humans, "humans"); Add(fire, "fire"); Add(game, "game"); Add(hud, "hud");
-			Add(heliCamera, "heliCamera");
+			Add(heliCamera, "heliCamera"); Add(uiConfig, "uiConfig"); Add(controlsHint, "controlsHint");
 			if (playerControl != null)
 			{
 				_ctx.InstallByType(playerControl, typeof(IControlSource));
@@ -61,6 +63,7 @@ namespace FlameAndBlame.Main
 			if (heliCamera != null) heliCamera.Initialize();
 			if (game != null) game.Initialize();
 			if (hud != null) hud.Initialize();
+			if (controlsHint != null) controlsHint.Initialize();
 			if (testMode != null) testMode.Initialize();
 		}
 

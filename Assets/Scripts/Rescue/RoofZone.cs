@@ -1,4 +1,5 @@
 using FlameAndBlame.Fire;
+using FlameAndBlame.VFX;
 using UnityEngine;
 
 namespace FlameAndBlame.Rescue
@@ -7,11 +8,33 @@ namespace FlameAndBlame.Rescue
 	public class RoofZone : MonoBehaviour
 	{
 		[SerializeField] private FireSide fireSide;
+		[Tooltip("FillEffectView on the RoofFire_<Side> child (optional).")]
+		[SerializeField] private FillEffectView roofFireView;
+		[Tooltip("Sector mesh of the same child (optional).")]
+		[SerializeField] private RoofSectorMesh roofSector;
+
+		private bool _setupDone;
 
 		public bool OnFire => fireSide != null && fireSide.RoofOnFire;
 
 		private void OnEnable() { if (fireSide != null) fireSide.ReachedTop += OnReachedTop; }
 		private void OnDisable() { if (fireSide != null) fireSide.ReachedTop -= OnReachedTop; }
+
+		private void Update() => Refresh();
+
+		/// <summary>Presentation only: lazy one-time setup, then the roof fire fill follows OnFire.</summary>
+		public void Refresh()
+		{
+			if (fireSide == null) return;
+			if (!_setupDone && fireSide.Config != null)
+			{
+				_setupDone = true;
+				if (roofFireView != null) roofFireView.SmoothTime = fireSide.Config.roofIgniteTime;
+				var b = fireSide.Building;
+				if (roofSector != null && b != null) roofSector.Initialize(b.footprintX, b.footprintZ);
+			}
+			if (roofFireView != null) roofFireView.SetFill(OnFire ? 1f : 0f);
+		}
 
 		public void ReportEnter(Collider other)
 		{
