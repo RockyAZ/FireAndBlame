@@ -1,76 +1,186 @@
 # Flame and Blame: phase plan
 
-## Recommendation on scope
-Build the full brief, but in 6 gated phases. One giant prompt makes the main agent lose track of the contract, and a tiny slice would throw away work. Each phase ends with a compile check and a test run, and only then does the next phase start. Phase 0 is done once and fixes the design, the contract and the order (layers and tags, configs, input). Later phases only add code.
+Build the full brief in eight gated phases (0 to 7). Each phase ends with a compile check and a play-test. The next phase starts only after its gate passes.
 
-Rules for every phase:
-- Start a fresh main-agent conversation per phase if context gets long. CLAUDE.md, brief.md, GAME_DESIGN.md and PROGRESS.md carry everything the agent needs.
-- The agent updates PROGRESS.md at the end of each phase (done, open bugs, next phase).
-- Order inside a phase: gameplay-coder, compiler, scene-builder, vfx-artist if listed, compiler, playtester. Every phase that adds a system also adds its [SerializeField] and Install/Initialize lines to MainEntry, and scene-builder assigns the new field.
-- If compiler or playtester reports a failure, send it back to the right agent and repeat, at most 3 rounds. After that, stop and write the blocker into PROGRESS.md.
+## How every phase runs
+- Start a fresh main-agent session per phase. The files carry the context: CLAUDE.md, brief.md, GAME_DESIGN.md, TASKS.md, PROGRESS.md.
+- Run the steps in order. Each step names one agent. Do not combine steps.
+- If a compiler or playtester step fails, send the error to the agent that owns the file, then rerun that check. Stop after 3 rounds and write the blocker into PROGRESS.md.
+- Any phase that adds a system also adds its `[SerializeField]`, `Install` and `Initialize` lines to MainEntry. The scene-builder then assigns the field.
+- At the end of each phase, the main agent updates PROGRESS.md with what is done, what is open, and what the next phase starts with.
 
-## Phase 0: foundation
-Output: GAME_DESIGN.md, TASKS.md, one asmdef per module (JSON text, references by name), ProjectBootstrap (layers, tags, default config assets, collision matrix), all config classes, all enums and interfaces from CLAUDE.md, stub classes for every system, and MainEntry that compiles.
-Prompt:
-```
-Read CLAUDE.md and brief.md. Phase 0 only.
-1. game-designer: write GAME_DESIGN.md (behaviour of each component, state transition table for humans, fire rules, test mode) and TASKS.md split into phases 1 to 5 with the files each task touches. Do not rename anything in the interface contract in CLAUDE.md; if you must change it, edit CLAUDE.md and say so.
-2. gameplay-coder: create every asmdef from the module table in CLAUDE.md (Injection already exists, do not touch it), Assets/Editor/ProjectBootstrap.cs, all config ScriptableObject classes with the brief.md defaults, the Core enums and interfaces, stub classes for every class in the contract, and Main/MainEntry.cs following the example in CLAUDE.md.
-3. compiler: confirm it compiles with no cyclic or missing assembly references, and that tags, layers and the assets in Assets/Settings/ now exist.
-4. Write PROGRESS.md.
-```
-Gate: compiles, all asmdefs resolve by name, layers and tags exist, 6 config assets exist.
+---
 
-## Phase 1: helicopter and cup, plus test mode skeleton
-Output: HeliController (smoothed input, drift, leveling), PlayerControlSource, ScriptedControlSource, RotorHazard, Cup chain behaviour (joints from CupConfig), TestModeController, scene with ground, heli and cup.
-Prompt:
-```
-Read CLAUDE.md, GAME_DESIGN.md, TASKS.md, PROGRESS.md. Phase 1 only.
-gameplay-coder: HeliController, PlayerControlSource (Input System, actions created in code), ScriptedControlSource, RotorHazard, Cup (joint chain and acceleration), TestModeController with ITestModeAware on heli and cup.
-compiler. Then scene-builder: create Assets/Scenes/Main.unity with the MainEntry object (MainEntry component only) and Game/Environment/Ground, Game/Actors/Heli (body, rotors, tail rotor, cup chain, HumanAnchor, GrabZone) and a disabled TestHarness; assign every MainEntry field that exists so far. Then compiler. Then playtester: PlayMode tests for smooth acceleration (velocity does not jump), yaw drift, rotor crash, kinematic test mode switch.
-Update PROGRESS.md.
-```
-Gate: heli flies smoothly in the Editor, rotor hit sets IsCrashed, test mode toggles without errors, MainEntry injects without KeyNotFoundException.
+## Phases 0 to 2: DONE
+Foundation, helicopter with cup and camera, and the pool, water and fire logic are done. See PROGRESS.md.
 
-## Phase 2: pool, water, building, fire
-Output: PoolZone, Cup.FillTick, WaterDrop, Cup.Tug dumping water, FireSide (growth, extinguish, pause, lost mode), RoofZone fire flag, GroundFireZone, scene objects for building, pool, ground fire.
-Prompt:
-```
-Read CLAUDE.md, GAME_DESIGN.md, TASKS.md, PROGRESS.md. Phase 2 only.
-gameplay-coder: PoolZone, WaterDrop, Cup water and Tug, FireSide, RoofZone, GroundFireZone (without human logic yet; leave a TODO that calls Human only through the contract).
-compiler. scene-builder: Building (5 floors, 4 sides each with FireSide and a burn trigger), Roof with 4 RoofZones, Pool with PoolZone on the Water layer, GroundFire triggers. compiler. playtester: fill in pool, dump on a side extinguishes it for maxStopFireTime then fire restarts, partial water does not extinguish, a side at the top sets RoofOnFire.
-Update PROGRESS.md.
-```
-Gate: all fire and water tests pass.
+---
 
-## Phase 3: humans
-Output: Human (state machine, attach/detach, stun, strength), HumanAnimator (blank default), Cup.TryGrab rules, pool grab by mistake (state 4), roof and ground consequences, scene humans.
-Prompt:
-```
-Read CLAUDE.md, GAME_DESIGN.md, TASKS.md, PROGRESS.md. Phase 3 only.
-gameplay-coder: Human, HumanAnimator, HumanStrength logic, Cup.TryGrab/ReleaseAll, and the human branches in PoolZone, RoofZone, GroundFireZone.
-compiler. scene-builder: add 4 humans on the roof (Human layer and tag, Rigidbody, capsule). compiler. playtester: empty cup grabs up to 2 humans, a full cup bounces and stuns, pool grab gives state 4, release over the pool gives state 3, release over the roof gives state 1, release over ground fire gives state 5, roof fire kills, strength drops above the acceleration threshold and the human falls at zero.
-Update PROGRESS.md.
-```
-Gate: all five states reachable and tested.
+## Phase 3: fire and water visuals, pool filling, controls hint
 
-## Phase 4: game rules and UI
-Output: GameManager (lose, win, score; injected systems, no Register calls), WaterGauge, HumanStrengthBar, ResultPanel.
-Prompt:
-```
-Read CLAUDE.md, GAME_DESIGN.md, TASKS.md, PROGRESS.md. Phase 4 only.
-gameplay-coder: GameManager, WaterGauge, HumanStrengthBar, ResultPanel.
-compiler. scene-builder: Canvas with the water gauge and result panel, world-space strength bar on each human, GameManager wiring. compiler. playtester: crash gives Lost, all humans dead, all sides burning and sides at lost mode; all humans resolved gives Won; score matches GameRulesConfig.
-Update PROGRESS.md.
-```
-Gate: win and lose paths tested.
+**Output:** `FillEffect` shader with `M_Fire` and `M_Water` materials, `FillEffectView`, `RoofSectorMesh`, a fire overlay on each wall that rises with the side's fire height, four separate roof fire sectors, the tank cube filling blue in the pool, a blue pool surface, `UIConfig` and a controls hint in the top-right corner.
 
-## Phase 5: effects and polish
-Output: fire on sides, ground fire, water drop and splash, stars on stunned humans, smoke (optional), basic materials.
-Prompt:
+**Gate:** in real Play mode (not test mode), the walls visibly burn upward and light their roof sector at the top, flying the tank into the pool fills it and its blue level rises, and the hint is visible. All earlier tests still pass.
+
+**Prompt:**
 ```
-Read CLAUDE.md, GAME_DESIGN.md, TASKS.md, PROGRESS.md. Phase 5 only.
-vfx-artist: effects listed in TASKS.md, exposing Play()/Stop() only. gameplay-coder: hook those calls from FireSide, WaterDrop, Human.Stun, Cup.Tug. compiler. scene-builder: assign effect prefabs. compiler. playtester: rerun the full PlayMode suite and report.
-Update PROGRESS.md with a short tuning guide pointing at the ScriptableObjects.
+Read CLAUDE.md (including "Contract additions (Phase 3 ...)"), brief.md, GAME_DESIGN.md, TASKS.md and PROGRESS.md. Phase 3 only. Use the subagents. Minimize usage of taking screenshots.
+
+Step 1, game-designer: add a "Visuals and controls hint" section to GAME_DESIGN.md and a "Fire and water ball" section for Phase 4. Renumber TASKS.md: old Phase 3 becomes 5, old 4 becomes 6, old 5 becomes 7. Add task lists for the new Phases 3 and 4 from PHASES.md. Do not change the contract.
+
+Step 2, vfx-artist: write Assets/Shaders/FillEffect.shader as specified in CLAUDE.md, then create M_Fire and M_Water in Assets/VFX/. Write FillEffectView and RoofSectorMesh in the VFX module.
+
+Step 3, gameplay-coder: add UIConfig and its defaults to ProjectBootstrap, write ControlsHintView, connect FireSide and RoofZone to their FillEffectViews and Cup to its waterView, add the new fields to the configs and MainEntry.
+
+Step 4, compiler: check that the project compiles and that UIConfig.asset exists.
+
+Step 5, scene-builder: add the FireOverlay child to each side, the four RoofFire sectors on the roof, M_Water and FillEffectView on the tank cube, M_Water on the pool surface, and a Canvas with the controls hint in the top-right corner. Assign every new field and check that none is null.
+
+Step 6, compiler: check that the project compiles.
+
+Step 7, playtester: with test mode OFF and real physics, write and run tests showing that:
+- each FireOverlay's _Fill follows its side's Height01 as the fire grows,
+- a side at the top raises only its own roof sector's _Fill toward 1,
+- flying the tank into the pool with ScriptedControlSource raises Water01 and the tank view's _Fill,
+- the controls hint text equals UIConfig.controlsHintText.
+Read shader values with Renderer.GetPropertyBlock. Rerun all earlier tests.
+
+Step 8, main agent: update PROGRESS.md, and tell me what to check by eye in Play mode.
 ```
-Gate: full suite passes. Then you play it and tune the numbers in Assets/Settings/.
+
+---
+
+## Phase 4: roof slabs and camera-relative movement
+
+The water ball drop already works (done during Phase 3). This phase reworks the roof and changes heli movement to follow the camera, with Z and X for turning.
+
+**Current scene (made by you, keep it):** the four sides are instances of one `Building_Side` prefab. Under `Roof` there are four `RoofSlab` boxes of different sizes that do not overlap, one per side. Each RoofSlab has a `RoofFire` child that still carries `RoofSectorMesh`.
+
+**Output:** a `RoofSlab` component on each RoofSlab object that owns the roof logic for its side. `RoofSectorMesh` is deleted. `RoofFire` is a plain fire renderer on top of its slab. Each slab has a `HumanSpawnArea` box for Phase 5. `RoofZone` is replaced by `RoofSlab`. A water ball hitting a slab puts out that slab's side. WASD moves the heli relative to the camera view, Z and X turn it, and the hint shows the new keys.
+
+**Gate:** in real Play mode, when a side burns to the top, only its own slab catches fire, and the fire covers that slab's top exactly. Dropping water on the side or on its slab puts both out. Each slab shows a HumanSpawnArea gizmo inside its top face. W flies toward where the camera looks whatever way the heli faces, A and D slide to the camera's left and right, Z turns counterclockwise and X clockwise. All earlier tests still pass.
+
+**Prompt:**
+```
+Read CLAUDE.md (including "Contract additions (Phase 4: roof slabs)" and "Contract additions (Phase 4: camera-relative movement and Z/X turning)"), brief.md, GAME_DESIGN.md, TASKS.md and PROGRESS.md. Phase 4 only. Use the subagents. Do not take screenshots.
+The user built the roof by hand: keep the existing Building_Side prefab instances and the four RoofSlab objects and their sizes. Do not rebuild them.
+
+Step 1, game-designer: replace the Phase 4 section of GAME_DESIGN.md and TASKS.md with this roof slab rework and the camera-relative movement. Update the helicopter feel section: movement is camera-relative, Z/X turn. In section 10, note that the ball drop is already implemented. Do not change the contract beyond what CLAUDE.md already says.
+
+Step 2, gameplay-coder: write RoofSlab in the Fire module as specified in CLAUDE.md. Add serialized RoofSlab[] to FireSystem, initialize the slabs there, and expose RoofSlabs. Delete RoofSectorMesh and RoofZone, and move any logic they had into RoofSlab. Update WaterDrop so a hit on a RoofSlab extinguishes that slab's FireSide. Add roofFireHeight to FireConfig and its default to ProjectBootstrap. Update every test that used RoofZone or RoofSectorMesh.
+Also: add MoveWorld to HeliCommand, compute it in PlayerControlSource from cameraTransform, make HeliController move along MoveWorld, replace Q/E with Z (Yaw -1) and X (Yaw +1), update ScriptedControlSource, change the UIConfig default hint text in ProjectBootstrap, and update the existing UIConfig.asset value too (ProjectBootstrap only creates missing assets). Update heli tests that relied on yaw-relative movement.
+
+Step 3, compiler: check that the project compiles and no reference to RoofZone or RoofSectorMesh is left.
+
+Step 4, scene-builder: on each of the four RoofSlab objects:
+- add the RoofSlab component and assign its FireSide (the Building_Side instance on the same side) and its RoofFire FillEffectView,
+- remove the missing-script RoofSectorMesh from the RoofFire child and make RoofFire a plain box with M_Fire and FillEffectView, no collider,
+- add a child HumanSpawnArea (empty transform) and assign it,
+- make sure the slab has a non-trigger BoxCollider on layer Building with tag Roof.
+Then remove the old RoofZone objects if any remain, assign FireSystem.roofSlabs, assign the Main Camera to PlayerControlSource.cameraTransform, and read every new field back to confirm none is null.
+
+Step 5, compiler: check that the project compiles.
+
+Step 6, playtester: with test mode OFF, write and run tests showing that:
+- each slab's RoofFire box covers its slab top (its X and Z bounds match the slab's top face within 0.01 m),
+- a side at the top ignites only its own slab, and the other slabs stay at _Fill 0,
+- extinguishing a side clears its slab fire,
+- a water ball dropped onto a slab extinguishes that slab's side,
+- each HumanSpawnArea lies inside its slab's top face, inset by roofHumanSpawnMargin, and GetSpawnPoint returns points inside it,
+- an IKillable inside a burning slab's area is killed,
+- with the camera yawed 90 degrees from the heli, W moves the heli along the flattened camera forward (angle under 5 degrees), and D along the camera right,
+- turning the heli with Yaw does not change the move direction for the same camera,
+- Z decreases the heli's yaw angle (counterclockwise from above) and X increases it,
+- the hint text shows Z/X and no longer Q/E.
+Rerun all earlier tests.
+
+Step 7, main agent: update PROGRESS.md, and tell me what to check by eye in Play mode before humans start.
+```
+
+---
+
+## Phase 5: humans
+
+**Output:** Human with its state machine, attach and detach, stun and strength, HumanAnimator with a blank default, Cup.TryGrab rules, the pool grab by mistake (state 4), and the roof and ground consequences. Humans spawned on the RoofSlab spawn areas.
+
+**Gate:** all five states are reachable and tested.
+
+**Prompt:**
+```
+Read CLAUDE.md, GAME_DESIGN.md, TASKS.md and PROGRESS.md. Phase 5 only. Use the subagents.
+
+Step 1, gameplay-coder: write Human, HumanAnimator, strength logic, Cup.TryGrab and ReleaseAll, and the human branches in PoolZone, RoofSlab and GroundFireZone. HumansSystem spawns humans at RoofSlab.GetSpawnPoint() using FireSystem.RoofSlabs.
+
+Step 2, compiler: check that the project compiles.
+
+Step 3, scene-builder: create a Human prefab (Human layer and tag, Rigidbody, capsule collider) and assign it to HumansSystem. Humans are spawned on the RoofSlab spawn areas at start, not placed by hand.
+
+Step 4, compiler: check that the project compiles.
+
+Step 5, playtester: write and run tests showing that:
+- an empty cup grabs up to 2 humans,
+- a full cup bounces the human and stuns it,
+- a pool grab gives state 4,
+- release over the pool gives state 3,
+- release over the roof gives state 1,
+- release over ground fire gives state 5,
+- roof fire kills,
+- strength drops when acceleration is above the threshold, and the human falls at zero.
+
+Step 6, main agent: update PROGRESS.md.
+```
+
+---
+
+## Phase 6: game rules and UI
+
+**Output:** GameManager (win, lose, score), HumanStrengthBar and ResultPanel.
+
+**Gate:** win and lose paths are tested.
+
+**Prompt:**
+```
+Read CLAUDE.md, GAME_DESIGN.md, TASKS.md and PROGRESS.md. Phase 6 only. Use the subagents.
+
+Step 1, gameplay-coder: write GameManager, HumanStrengthBar and ResultPanel. Skip WaterGauge: the tank shading is the water indicator.
+
+Step 2, compiler: check that the project compiles.
+
+Step 3, scene-builder: build the result panel on the existing Canvas, add a world-space strength bar to each human, and wire GameManager. Assign the fields.
+
+Step 4, compiler: check that the project compiles.
+
+Step 5, playtester: write and run tests showing that:
+- a heli crash gives Lost, kills every human and sets every side to lost mode,
+- all humans resolved gives Won,
+- the score matches GameRulesConfig.
+
+Step 6, main agent: update PROGRESS.md.
+```
+
+---
+
+## Phase 7: effects and polish
+
+**Output:** ground fire particles, splash when the water ball hits, stars over stunned humans, optional smoke and flame particles on top of the shader fire.
+
+**Gate:** the full PlayMode suite passes. Then you play the game and tune the numbers in Assets/Settings/.
+
+**Prompt:**
+```
+Read CLAUDE.md, GAME_DESIGN.md, TASKS.md and PROGRESS.md. Phase 7 only. Use the subagents.
+
+Step 1, vfx-artist: create the effects listed in TASKS.md. Each one exposes Play() and Stop() only.
+
+Step 2, gameplay-coder: call those methods from FireSide, GroundFireZone, WaterDrop.Hit, Human.Stun and Cup.Tug.
+
+Step 3, compiler: check that the project compiles.
+
+Step 4, scene-builder: assign the effect prefabs.
+
+Step 5, compiler: check that the project compiles.
+
+Step 6, playtester: run the full PlayMode suite and report the results.
+
+Step 7, main agent: update PROGRESS.md with a short tuning guide that points to the ScriptableObjects.
+```

@@ -82,5 +82,8 @@ Gate: compile clean (0 errors, 0 warnings), Main.unity plays with no errors (onl
 - Splines package logged a one-off TypeLoadException importing its own UXML right after install; it did not recur.
 - heli_smooth_accel margin still thin (0.1192 vs limit 0.127).
 
-## Phase 3: NEXT (humans)
-Start with **P3-1 Human and animator** (gameplay-coder). See TASKS.md.
+## Plan change (2026-11-18)
+Two phases were inserted before humans (see PHASES.md). Old Phase 3 (humans) is now Phase 5, old Phase 4 (rules and UI) is Phase 6, old Phase 5 (effects) is Phase 7. TASKS.md still uses the old numbers until the Phase 3 game-designer step renumbers it.
+
+## Phase 3: NEXT (fire and water visuals, pool filling in real play, controls hint)
+Start with the game-designer step in PHASES.md, Phase 3.

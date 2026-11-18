@@ -34,6 +34,13 @@ All gameplay variables live in ScriptableObjects. Interactions use physics: coll
 - Strength: when it reaches zero the human lets go and falls. Landing on the ground kills the human (all ground except the pool is on fire); landing in the pool makes it state 3; landing on the roof makes it state 1.
 - A human on the roof is in danger only on a side whose roof is on fire.
 
+## Decisions (Phase 3 and 4 additions)
+- Fire is visible: each building side shows fire rising from the bottom (shader fill = side fire height). When a side reaches the top, the roof sector next to that side lights up separately.
+- The water tank (the cube under the heli) uses the same shader in blue and visibly fills from the bottom while it hangs in the pool. The tank shading is the water indicator.
+- A text hint in the top-right corner lists the controls.
+- F drops the water as one physical ball. It spawns inside the tank, inherits the tank's velocity, and collides only with the building. A wall hit stops that side's fire for maxStopFireTime. A roof hit stops the side nearest to the hit. A ball that misses falls through everything else and disappears. The tank shows empty right after the drop.
+- Humans come only after fire, filling and dropping work in real play.
+
 ## Architecture
 Module-based systems, each folder with its own text-written asmdef (references by name), wired by dependency injection from a single `MainEntry` GameObject. Full rules, module table and contract are in CLAUDE.md.
 
@@ -44,4 +51,7 @@ HumanConfig: maxStrength 100, accelerationThreshold 4, strengthLossFactor 6, str
 FireConfig: spreadSecondsPerFloor 12, maxStopFireTime 20, extinguishMinWater01 0.9, groundFirePermanent true, lostSpreadSecondsPerFloor 3.
 BuildingConfig: floors 5, floorHeight 3.5, footprint 12 x 12, roofHumanSpawnMargin 1.5.
 PoolConfig (inside GameRulesConfig): poolSize 10 x 2.5 x 6, distanceFromBuilding 14.
+FireConfig visuals: wallFireSmoothTime 0.4, roofIgniteTime 1.5.
+CupConfig water ball and visuals: waterBallRadius 0.8, waterBallMass 20, waterBallLifetime 6, waterBallKillY -5, fillVisualSmoothTime 0.3.
+UIConfig: controlsHintText "WASD move | Space/Ctrl up/down | Q/E turn | F drop water | Mouse look | Wheel zoom", hintFontSize 22, hintMargin 20.
 GameRulesConfig: scorePerRescued 100, penaltyPerDeath 25, bonusPerSideNotOnFire 25, endOnAllSidesBurning true.
