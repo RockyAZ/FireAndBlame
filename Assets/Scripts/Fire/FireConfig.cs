@@ -12,5 +12,6 @@ namespace FlameAndBlame.Fire
 		[Tooltip("Seconds per floor in lost mode [s].")] public float lostSpreadSecondsPerFloor = 3f;
 		[Tooltip("Delay before the fire starts [s].")] public float startDelaySeconds = 5f;
 		[Tooltip("Smoothing time of the roof fire visual [s]. Visual only.")] public float roofIgniteTime = 1.5f;
+		[Tooltip("Height of the roof fire box above the slab top [m].")] public float roofFireHeight = 1.5f;
 	}
 }

@@ -16,7 +16,7 @@ namespace FlameAndBlame.Heli
 		private Rigidbody _body;
 		private bool _ready, _testMode, _savedKinematic;
 		private IControlSource _savedSource;
-		private Vector2 _move;
+		private Vector3 _move;
 		private float _vertical, _yawInput, _yawRate, _noiseSeed;
 		private Vector3 _velocity, _acceleration;
 
@@ -48,7 +48,7 @@ namespace FlameAndBlame.Heli
 		{
 			if (IsCrashed) return;
 			IsCrashed = true;
-			_move = Vector2.zero; _vertical = 0f; _yawInput = 0f;
+			_move = Vector3.zero; _vertical = 0f; _yawInput = 0f;
 			if (!Body.isKinematic)
 			{
 				Body.useGravity = true;
@@ -89,9 +89,8 @@ namespace FlameAndBlame.Heli
 			Smooth(cmd, dt);
 
 			Vector3 v = Velocity;
-			Quaternion yaw = Quaternion.Euler(0f, Body.rotation.eulerAngles.y, 0f);
-			Vector3 target = yaw * new Vector3(_move.x * _config.maxHorizontalSpeed,
-				_vertical * _config.maxVerticalSpeed, _move.y * _config.maxHorizontalSpeed);
+			Vector3 target = new Vector3(_move.x * _config.maxHorizontalSpeed,
+				_vertical * _config.maxVerticalSpeed, _move.z * _config.maxHorizontalSpeed);
 			// Clamped chase: the velocity can never change by more than maxAcceleration * dt per step.
 			Vector3 accel = Vector3.ClampMagnitude((target - v) * _config.velocityResponse, _config.maxAcceleration);
 			_acceleration = accel;
@@ -128,9 +127,9 @@ namespace FlameAndBlame.Heli
 
 		private void Smooth(HeliCommand cmd, float dt)
 		{
-			Vector2 m = Vector2.ClampMagnitude(cmd.Move, 1f);
+			Vector3 m = Vector3.ClampMagnitude(new Vector3(cmd.MoveWorld.x, 0f, cmd.MoveWorld.z), 1f);
 			_move.x = Axis(_move.x, m.x, dt);
-			_move.y = Axis(_move.y, m.y, dt);
+			_move.z = Axis(_move.z, m.z, dt);
 			_vertical = Axis(_vertical, Mathf.Clamp(cmd.Vertical, -1f, 1f), dt);
 			_yawInput = Axis(_yawInput, Mathf.Clamp(cmd.Yaw, -1f, 1f), dt);
 		}

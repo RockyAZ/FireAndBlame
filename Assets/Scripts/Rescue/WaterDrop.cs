@@ -30,6 +30,13 @@ namespace FlameAndBlame.Rescue
 		public void ReportHit(Collider other)
 		{
 			if (other == null) return;
+			var slab = other.GetComponentInParent<RoofSlab>();
+			if (slab != null)
+			{
+				if (slab.FireSide != null) slab.FireSide.Extinguish(Amount01);
+				Destroy(gameObject);
+				return;
+			}
 			var side = other.GetComponentInParent<FireSide>();
 			if (side != null) { side.Extinguish(Amount01); Destroy(gameObject); return; }
 			var ground = other.GetComponentInParent<GroundFireZone>();

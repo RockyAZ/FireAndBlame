@@ -69,7 +69,7 @@ namespace FlameAndBlame.Tests.PlayMode
             Assert.IsFalse(_heli.IsTestMode, "should start in real physics mode");
             var scripted = _tm.Scripted;
             _heli.SetControlSource(scripted);
-            scripted.Set(new HeliCommand { Move = new Vector2(0f, 1f) });
+            scripted.Set(new HeliCommand { MoveWorld = Vector3.forward });
             {
                 var cc = AssetDatabase.LoadAssetAtPath<CupConfig>("Assets/Settings/CupConfig.asset");
                 Debug.Log($"[TEST-INFO] {n} heliIsolationMassScale={cc.heliIsolationMassScale}");
@@ -119,7 +119,7 @@ namespace FlameAndBlame.Tests.PlayMode
             const string n = "heli_smooth_accel_testmode";
             yield return Load();
             _tm.EnterAll();
-            _tm.Scripted.Set(new HeliCommand { Move = new Vector2(0f, 1f) });
+            _tm.Scripted.Set(new HeliCommand { MoveWorld = Vector3.forward });
             var prev = _heli.Velocity;
             float dt = Time.fixedDeltaTime;
             float limit = _cfg.maxAcceleration * dt * 1.05f + 1e-3f;

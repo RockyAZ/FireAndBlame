@@ -200,11 +200,11 @@ Full behaviour in GAME_DESIGN.md.
 - `RoofSectorMesh` is deleted. `RoofZone` is deleted; read `RoofSlab` wherever the contract says RoofZone.
 - Fire module: `RoofSlab : MonoBehaviour, on the RoofSlab object` (non-trigger BoxCollider, layer Building, tag Roof).
   - Serialized: `FireSide fireSide`, `FillEffectView roofFireView` (on the RoofFire child), `Transform humanSpawnArea`.
-  - `void Initialize(FireConfig fire, BuildingConfig building)`, called by FireSystem. It sizes and places the RoofFire child to cover the slab's top face exactly (X and Z from the slab's BoxCollider, height `FireConfig.roofFireHeight`, bottom 0.01 m above the top face), and sizes `humanSpawnArea` as a box on the top face inset by `BuildingConfig.roofHumanSpawnMargin` on every edge, with a small height (0.1). It sets `roofFireView.SmoothTime = roofIgniteTime`.
+  - `void Initialize(FireConfig fire, BuildingConfig building)`, called by FireSystem. It only sets `roofFireView.SmoothTime = roofIgniteTime`. It never moves or sizes RoofFire or `humanSpawnArea`: the user places them by hand in the `Assets/Prefabs/RoofSlab` prefab (edit the prefab to change all four roofs at once).
   - `FireSide FireSide; bool OnFire;` OnFire follows `fireSide.RoofOnFire` (set when the side reaches the top, cleared by Extinguish). Drives `roofFireView.SetFill(OnFire ? 1 : 0)`.
-  - `void ReportStay(Collider other)`: while OnFire, an `IKillable` touching the slab's top area is killed. A child trigger box over the top face (height 2 m, layer FireZone) forwards to it, so the slab's solid collider stays solid.
+  - `void ReportStay(Collider other)`: while OnFire, an `IKillable` touching the RoofFire collider is killed (attached/hanging humans too). There is no other kill volume; `RoofSlabTrigger` on RoofFire forwards OnTriggerEnter/Stay to it.
   - `Bounds SpawnBounds; Vector3 GetSpawnPoint()` returns a random point on the bottom of the spawn box, in world space. Draws the spawn box with `OnDrawGizmos`.
-  - `RoofFire` child: plain box, no collider, `M_Fire`, `FillEffectView`. It only renders.
+  - `RoofFire` child: box with `M_Fire`, `FillEffectView`, a trigger BoxCollider (layer FireZone) and `RoofSlabTrigger` (finds its RoofSlab with GetComponentInParent). The four slabs are instances of `Assets/Prefabs/RoofSlab.prefab`.
 - `FireSystem`: serialized `RoofSlab[] roofSlabs`, initializes them, exposes `IReadOnlyList<RoofSlab> RoofSlabs` (HumansSystem uses it in Phase 5 for spawning).
 - `WaterDrop.ReportHit`: a hit on a collider whose parent chain has a `RoofSlab` extinguishes `RoofSlab.FireSide` (this replaces "nearest roof edge").
 - `FireConfig.roofFireHeight` default 1.5.

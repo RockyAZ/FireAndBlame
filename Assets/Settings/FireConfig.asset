@@ -18,3 +18,5 @@ MonoBehaviour:
   groundFirePermanent: 1
   lostSpreadSecondsPerFloor: 3
   startDelaySeconds: 5
+  roofIgniteTime: 1.5
+  roofFireHeight: 1.5

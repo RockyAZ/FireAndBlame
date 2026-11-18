@@ -40,22 +40,34 @@ Paths are relative to X:\Unity\Flame and Blame. S = Assets/Scripts. Owners: game
 - P3-9 Compile gate. compiler. Check: zero errors.
 - P3-10 Tests (test mode OFF, real physics). playtester. Files: Assets/Tests/PlayMode/VisualsTests.cs. `overlay_fill_follows_height`, `roof_sector_only_own_side`, `tank_fills_in_pool_view`, `hint_text_matches_config` PASS (values read with Renderer.GetPropertyBlock). All earlier tests still PASS.
 
-## Phase 4: dropping water as a physical ball
-- P4-1 WaterBall layer. gameplay-coder. Files: Assets/Editor/ProjectBootstrap.cs (layer WaterBall 16, collides with Building only). Check: layer exists; WaterBall row of the matrix is Building only; idempotent.
-- P4-2 Ball and Tug. gameplay-coder. Files: S/Rescue/WaterDrop.cs (solid ball, Launch with angular velocity, ReportHit(other, point), Hit event, destroy rules), S/Rescue/Cup.cs (Tug per GAME_DESIGN.md section 10), S/Rescue/CupConfig.cs (waterBallRadius, waterBallMass, waterBallLifetime, waterBallKillY). Check: compiles; defaults equal section 7.
-- P4-3 Update old tests. gameplay-coder. Files: Assets/Tests/PlayMode/FireWaterTests.cs. Check: tests that used the trigger drop use the new API and compile.
-- P4-4 Compile gate. compiler. Check: zero errors; WaterBall layer exists with the right collision row.
-- P4-5 Prefab and scene. scene-builder. Files: Assets/Prefabs/WaterDrop.prefab (layer WaterBall, non-trigger SphereCollider, M_Water, tag WaterDrop), Assets/Scenes/Main.unity (WaterCatch colliders disabled). Check: prefab still assigned to the Cup; no missing references.
+## Phase 4: roof slabs and camera-relative movement
+The water ball drop (WaterBall layer, solid WaterDrop, Cup.Tug, WaterBallTests) is ALREADY IMPLEMENTED; see GAME_DESIGN.md section 10. Remaining work:
+- P4-1 RoofSlab and Fire changes. gameplay-coder. Files: S/Fire/RoofSlab.cs (new, per GAME_DESIGN.md section 1), S/Fire/FireSystem.cs (serialized `RoofSlab[] roofSlabs`, `RoofSlabs`, initializes slabs), S/Fire/FireConfig.cs (roofFireHeight 1.5), delete S/Rescue/RoofZone.cs and S/VFX/RoofSectorMesh.cs (and their references in Cup, FireSide, tests, MainEntry), S/Rescue/WaterDrop.cs (hit with RoofSlab in the parent chain extinguishes `RoofSlab.FireSide`; no nearest-edge math), Assets/Editor/ProjectBootstrap.cs (FireConfig.roofFireHeight default, and sets it on an existing FireConfig.asset only if the field is 0). Check: compiles; no `RoofZone` or `RoofSectorMesh` left in Assets; FireConfig.asset roofFireHeight 1.5; second Bootstrap run changes nothing.
+- P4-2 Camera-relative movement. gameplay-coder. Files: S/Core/HeliCommand.cs (MoveWorld, already in the contract), S/Heli/PlayerControlSource.cs (serialized `cameraTransform`, MoveWorld per section 1, Z = Yaw -1, X = Yaw +1, Q and E removed, one warning when the camera is null), S/Heli/HeliController.cs (moves along MoveWorld only, smoothing on MoveWorld in world space, no yaw-relative move), S/Testing/ScriptedControlSource.cs (tests set MoveWorld; only Move set maps x to world X, y to world Z), S/UI/UIConfig.cs (controlsHintText default "WASD move (camera) | Space/Ctrl up/down | Z/X turn | F drop water | Mouse look | Wheel zoom"), Assets/Settings/UIConfig.asset (same value; the old Q/E text is replaced, by ProjectBootstrap or by editing the asset). Check: compiles; asset text equals the default; HeliCameraController still ignores input in test mode.
+- P4-3 Update tests that used RoofZone or the nearest-edge rule. gameplay-coder. Files: Assets/Tests/PlayMode/*.cs. Check: compile; `ball_roof_hit_nearest_side` is renamed `ball_roof_hit_slab_side` in P4-6; tests that used `RoofZone.ReportEnter` use RoofSlab.
+- P4-4 Compile gate. compiler. Check: zero errors; no `RoofZone` or `RoofSectorMesh` symbols.
+- P4-5 Scene wiring. scene-builder. Files: Assets/Scenes/Main.unity. On the four existing hand-made slabs under Roof (keep their sizes): add the `RoofSlab` component, BoxCollider non-trigger layer Building tag Roof, a plain-box child `RoofFire` (no collider, `M_Fire`, `FillEffectView`), a `HumanSpawnArea` child, assign `fireSide` (the matching Side_X), `roofFireView` and `humanSpawnArea`; remove the old RoofZone and RoofSectorMesh objects and components (RoofFire_North/East/South/West of Phase 3); assign `FireSystem.roofSlabs` (4 entries); assign `PlayerControlSource.cameraTransform` to the Main Camera. Check: no null serialized fields, no missing scripts, no console errors on play; slabs do not overlap each other.
 - P4-6 Compile gate. compiler. Check: zero errors.
-- P4-7 Tests (test mode OFF, real physics). playtester. Files: Assets/Tests/PlayMode/WaterBallTests.cs. `ball_spawns_in_tank_with_velocity`, `ball_extinguishes_wall`, `ball_roof_hit_nearest_side`, `ball_miss_falls_through_ground`, `tank_empties_after_tug`, `partial_tank_no_extinguish` PASS. All earlier tests still PASS.
+- P4-7 Tests (test mode OFF, real physics). playtester. Files: Assets/Tests/PlayMode/RoofSlabTests.cs, Assets/Tests/PlayMode/HeliControlTests.cs. `[TEST]` lines, all PASS:
+  - `roof_children_not_moved_and_fire_collider`: Initialize does not move RoofFire or HumanSpawnArea; RoofFire has a trigger BoxCollider on FireZone with RoofSlabTrigger; no TopTrigger.
+  - `roof_only_own_slab_ignites`: when one side reaches the top, only that slab's OnFire and view fill are 1; the other three stay 0.
+  - `roof_extinguish_clears_slab`: Extinguish on that side sets OnFire false and the view fill falls to 0.
+  - `ball_on_slab_extinguishes_side`: a real water ball dropped on a burning slab extinguishes that slab's FireSide; a ball on another slab does not.
+  - `spawn_points_in_area`: 200 `GetSpawnPoint` results lie on the bottom face of the hand-placed spawn box and inside SpawnBounds.
+  - `killable_on_burning_slab_dies`: an IKillable test object in the slab trigger is killed while OnFire, and not killed when not on fire.
+  - `move_camera_relative`: with the camera yawed 90 degrees from the heli, pressing W moves the heli along the camera forward within 5 degrees, and D along the camera right within 5 degrees.
+  - `heli_yaw_does_not_change_move`: after turning the heli, the same camera-relative key gives the same world move direction.
+  - `yaw_keys_direction`: Z decreases heli yaw angle (counterclockwise from above), X increases it.
+  - `hint_shows_zx`: the hint text contains "Z/X" and does not contain "Q/E".
+  All earlier tests still PASS.
 
 ## Phase 5: humans
 - P5-1 Human and animator. gameplay-coder. Files: S/Rescue/Human.cs, S/Rescue/HumanAnimator.cs, S/Rescue/HumansSystem.cs. Check: transition table in GAME_DESIGN.md section 3.
 - P5-2 Cup TryGrab, ReleaseAll. gameplay-coder. Files: S/Rescue/Cup.cs (Tug already done in Phase 4). Check: rules 1 to 5.
-- P5-3 Human branches in zones. gameplay-coder. Files: S/Rescue/PoolZone.cs, S/Rescue/RoofZone.cs, S/Fire/GroundFireZone.cs, S/Fire/FireSide.cs. Check: compiles, no upward reference.
-- P5-4 MainEntry. gameplay-coder. Files: S/Main/MainEntry.cs (HumansSystem, HumanConfig).
-- P5-5 Scene. scene-builder. Files: Assets/Scenes/Main.unity. 4 humans (layer and tag Human, Rigidbody, capsule, HumanAnimator) on the roof by `roofHumanSpawnMargin`, one per side, filled into HumansSystem; RoofZone FireSide refs. Check: humans start in S1.
-- P5-6 Tests. playtester. Files: Assets/Tests/PlayMode/HumanTests.cs. `grab_empty_two`, `grab_third_rejected`, `full_cup_bounce_stun`, `pool_grab_state4`, `release_pool_state3`, `release_roof_state1`, `release_ground_fire_dead`, `roof_fire_kills`, `side_fire_kills`, `strength_drops_and_falls` PASS.
+- P5-3 Human branches in zones. gameplay-coder. Files: S/Rescue/PoolZone.cs, S/Rescue/Human.cs (collision report: landing on a collider tagged Roof, unattached, in RescuedHanging or SwimmingInTank -> WaitingOnRoof), S/Fire/RoofSlab.cs (ReportStay kills IKillable while OnFire), S/Fire/GroundFireZone.cs, S/Fire/FireSide.cs. Check: compiles, no upward reference (Fire does not reference Rescue).
+- P5-4 MainEntry. gameplay-coder. Files: S/Main/MainEntry.cs (HumansSystem, HumanConfig). HumansSystem spawns or places humans on slabs through FireSystem.RoofSlabs and `RoofSlab.GetSpawnPoint()`, one per slab, so humans.Initialize runs after fire.Initialize (already the order). Check: injects without KeyNotFoundException.
+- P5-5 Scene. scene-builder. Files: Assets/Scenes/Main.unity. 4 humans (layer and tag Human, Rigidbody, capsule, HumanAnimator) filled into HumansSystem, placed at start on the RoofSlabs (one per slab, inside HumanSpawnArea via GetSpawnPoint). Check: humans start in S1 and each stands on its slab.
+- P5-6 Tests. playtester. Files: Assets/Tests/PlayMode/HumanTests.cs. `grab_empty_two`, `grab_third_rejected`, `full_cup_bounce_stun`, `pool_grab_state4`, `release_pool_state3`, `release_roof_state1` (released human lands on a RoofSlab), `release_ground_fire_dead`, `roof_fire_kills` (human on a burning slab dies), `side_fire_kills`, `strength_drops_and_falls` PASS.
 
 ## Phase 6: game rules and UI
 - P6-1 GameManager. gameplay-coder. Files: S/GameRules/GameManager.cs. Check: rules and score per GAME_DESIGN.md.

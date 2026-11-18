@@ -111,5 +111,29 @@ Gate: compile clean (0 errors, 0 warnings in project assemblies), all 16 PlayMod
 - `dumpDropRadius`/`dropLifetime` stay in CupConfig until Phase 4 replaces the drop with the ball.
 - The CLI accepts `--caller/--skill` on `unity command` but not on `unity status`/test calls in this version.
 
-## Phase 4: NEXT (roof slabs)
-Plan change (2026-11-18): the user reports that the water ball drop already works, so Phase 4 is now the roof slab rework (see PHASES.md and "Contract additions (Phase 4: roof slabs)" in CLAUDE.md). The user built Building_Side prefab instances and four RoofSlab boxes by hand; keep them. Phase 4 also changes heli movement: WASD relative to the camera, Z/X turn (Q/E removed). This replaces the Phase 0 decision "Move input is relative to the heli's yaw". Start with the game-designer step in PHASES.md, Phase 4.
+## Phase 4: DONE (2026-11-18), pending your by-eye Play mode check
+Roof slab rework and camera-relative movement. The water ball drop was already implemented.
+
+Gate: compile clean (0 errors, 0 warnings in project assemblies), all 26 PlayMode tests PASS (7 RoofSlabTests + 3 HeliCameraMoveTests + 7 FireWaterTests + 5 HeliTests + 4 VisualsTests), test mode OFF for the new tests. Two fix rounds were needed.
+
+### Done
+- **Design**: GAME_DESIGN.md: section 10 is now "Water ball and roof slabs" (ball drop marked done). RoofZone is replaced by RoofSlab everywhere, including the Phase 5 human rules. Heli feel is camera-relative with Z/X turning, and the old "move relative to yaw" decision is replaced. TASKS.md: P4-1..P4-7; P5 tasks spawn through `FireSystem.RoofSlabs` / `GetSpawnPoint`.
+- **RoofSlab** (Fire): `fireSide`, `roofFireView`, `humanSpawnArea`. `Initialize` only sets the roof fire smoothing; RoofFire and HumanSpawnArea are placed by hand in `Assets/Prefabs/RoofSlab.prefab` (edit the prefab to change all four roofs). RoofFire has a trigger BoxCollider (layer FireZone) + `RoofSlabTrigger`: while the roof burns, any IKillable touching the fire dies (hanging humans too); no other kill volume. Also `OnFire`, `SpawnBounds`, `GetSpawnPoint()`, `RoofFireView`, gizmo. FireSystem `roofSlabs` / `RoofSlabs`. WaterDrop: a hit in a RoofSlab parent chain extinguishes `RoofSlab.FireSide`. FireConfig `roofFireHeight` 1.5 exists but is now unused.
+- **Deleted** RoofZone.cs and RoofSectorMesh.cs (no code references remain).
+- **Movement**: `HeliCommand.MoveWorld`; `PlayerControlSource.cameraTransform` (flattened camera forward and right, falls back to the camera's up when looking straight down, falls back to world axes + 1 warning with no camera); HeliController moves along MoveWorld only; Z = Yaw -1, X = Yaw +1, Q/E removed; ScriptedControlSource maps Move to world X/Z when MoveWorld is unset. UIConfig hint default and UIConfig.asset now: "WASD move (camera) | Space/Ctrl up/down | Z/X turn | F drop water | Mouse look | Wheel zoom".
+- **Scene**: RoofSlab on the 4 hand-made slabs (transforms and sizes unchanged), mapped by position: `RoofSlab`=North, `RoofSlab (1) east`=East, `RoofSlab (2)`=South, `RoofSlab (1)`=West. HumanSpawnArea children were added. All four slabs are on layer Building with tag Roof; East's BoxCollider was a trigger and is now solid. FireSystem.roofSlabs is in Side order. `cameraTransform` = Main Camera. RoofFire MeshFilters were overridden to null in the instances and are now the Cube mesh.
+- **Tests**: `RoofSlabTests.cs` (roof_fire_covers_slab_top, roof_only_own_slab_ignites, roof_extinguish_clears_slab, ball_on_slab_extinguishes_side, spawn_area_inset, burning_slab_kills_killable, hint_shows_z_x), `HeliCameraMoveTests.cs` (move_camera_relative, move_ignores_heli_yaw, yaw_keys_z_x; virtual Keyboard via InputSystem.AddDevice). The Tests asmdef also references `Unity.InputSystem`. HeliTests and VisualsTests were updated for MoveWorld and RoofSlabs.
+
+### Fix rounds
+1. roof_fire_covers_slab_top: the RoofFire MeshFilters were null (instance overrides; the old RoofSectorMesh had built the mesh). Set to Cube. spawn_area_inset: `SpawnBounds` ignored slab rotation (North/South slabs rotY 270/90). Now the AABB of the 8 rotated corners.
+2. Compile: CS0136 duplicate local `b` in that fix; renamed.
+
+### Follow-up (user request, same day)
+- Roof slabs are now 4 instances of `Assets/Prefabs/RoofSlab.prefab` ("RoofSlab north/east/south/west"); FireSystem.roofSlabs rewired in Side order. RoofSlab no longer moves its children; the generated 2 m TopTrigger is gone. Tests replaced: `roof_children_not_moved_and_fire_collider`, `spawn_points_in_area`, `burning_slab_kills_killable` (inside the fire collider dies, 1.5 m above does not). All 26 PlayMode tests PASS, no missing-script warnings. CLAUDE.md, GAME_DESIGN.md and TASKS.md updated to match.
+
+### Open issues
+- **Yaw drift is strong**: up to ~64 deg in 1.5 s with no input (yawDriftTorque 0.6, maxYawRate 60). Command lag ~2 s. Retune if it feels wrong.
+- Test-runner temp scene `Assets/InitTestScene<guid>.unity` may be left in Assets (untracked); safe to delete.
+- Phase 5: "released human lands on slab -> WaitingOnRoof" is checked on the Human side (tag Roof), since Fire cannot reference Rescue.
+
+## Phase 5: NEXT (humans)

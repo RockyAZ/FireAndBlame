@@ -108,14 +108,15 @@ namespace FlameAndBlame.Tests.PlayMode
             north.Advance(100000f);
             string fail = north.RoofOnFire ? null : "North RoofOnFire false after reaching top";
             yield return WaitReal(_fc.roofIgniteTime * 3f + 0.5f);
-            var names = new[] { "RoofFire_North", "RoofFire_East", "RoofFire_South", "RoofFire_West" };
-            foreach (var nm in names)
+            if (_fire.RoofSlabs == null || _fire.RoofSlabs.Count == 0) fail = fail ?? "FireSystem.RoofSlabs empty";
+            else foreach (var slab in _fire.RoofSlabs)
             {
-                var v = FindView(nm);
-                if (v == null) { fail = fail ?? $"{nm} missing"; continue; }
+                var v = slab.RoofFireView;
+                string nm = $"RoofSlab_{(slab.FireSide != null ? slab.FireSide.Side.ToString() : "?")}";
+                if (v == null) { fail = fail ?? $"{nm}: roofFireView missing"; continue; }
                 float f = ShaderFill(v.GetComponent<Renderer>());
                 Debug.Log($"[TEST-INFO] {n} {nm} _Fill={f:F3}");
-                if (nm == "RoofFire_North") { if (f <= 0.9f) fail = fail ?? $"{nm} _Fill={f:F3}, expected >0.9"; }
+                if (slab.FireSide == north) { if (f <= 0.9f) fail = fail ?? $"{nm} _Fill={f:F3}, expected >0.9"; }
                 else if (f >= 0.05f) fail = fail ?? $"{nm} _Fill={f:F3}, expected <0.05";
             }
             Report(n, fail == null, fail);
