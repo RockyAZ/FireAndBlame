@@ -4,9 +4,21 @@ using UnityEngine;
 
 namespace FlameAndBlame.Fire
 {
+	/// <summary>
+	/// One building side. Local X runs along the wall, local +Z points away from the wall, origin at the wall base center.
+	/// Child colliders: burn band (kills, forwards through FireSideTrigger) and water catch (full height).
+	/// </summary>
 	public class FireSide : MonoBehaviour
 	{
 		[SerializeField] private Side side;
+		[Tooltip("Trigger box, layer FireZone, tag BuildingSide, with FireSideTrigger. Resized to the burning height.")]
+		[SerializeField] private BoxCollider burnBand;
+		[Tooltip("Trigger box, layer FireZone. Resized to the full building height.")]
+		[SerializeField] private BoxCollider waterCatch;
+
+		private FireConfig _config;
+		private BuildingConfig _building;
+		private float _delayLeft;
 
 		public Side Side => side;
 		public float Height01 { get; private set; }
@@ -16,16 +28,110 @@ namespace FlameAndBlame.Fire
 		public float PauseTimeLeft { get; private set; }
 		public event Action<FireSide> ReachedTop;
 
-		public void Initialize(FireConfig config) { }
-		public void ApplyBuilding(BuildingConfig building) { }
-		public void Advance(float dt) { }
-		public void Extinguish(float amount01) { }
-		public void SetLost() { IsLost = true; }
-		public void ReportEnter(Collider other) { }
-		public void ReportStay(Collider other) { }
+		public void Initialize(FireConfig config)
+		{
+			_config = config;
+			_delayLeft = config.startDelaySeconds;
+			Height01 = 0f;
+			IsBurning = RoofOnFire = IsLost = false;
+			PauseTimeLeft = 0f;
+			UpdateBand();
+		}
 
-		private void OnTriggerEnter(Collider other) => ReportEnter(other);
-		private void OnTriggerStay(Collider other) => ReportStay(other);
-		private void RaiseReachedTop() => ReachedTop?.Invoke(this);
+		public void ApplyBuilding(BuildingConfig building)
+		{
+			_building = building;
+			float total = TotalHeight;
+			float width = side == Side.North || side == Side.South ? building.footprintX : building.footprintZ;
+			if (waterCatch != null)
+			{
+				waterCatch.isTrigger = true;
+				waterCatch.size = new Vector3(width, total, building.burnTriggerDepth);
+				waterCatch.center = new Vector3(0f, total * 0.5f, building.burnTriggerDepth * 0.5f);
+			}
+			UpdateBand();
+		}
+
+		private float TotalHeight => _building == null ? 0f : _building.floors * _building.floorHeight;
+
+		private void Update() => Advance(Time.deltaTime);
+
+		/// <summary>Fire clock: start delay, pause countdown and restart, growth, reaching the top.</summary>
+		public void Advance(float dt)
+		{
+			if (_config == null || _building == null) return;
+			if (_delayLeft > 0f)
+			{
+				_delayLeft -= dt;
+				if (_delayLeft > 0f) return;
+				_delayLeft = 0f;
+				IsBurning = true;
+			}
+			if (!IsBurning)
+			{
+				if (PauseTimeLeft <= 0f) return;
+				PauseTimeLeft -= dt;
+				if (PauseTimeLeft > 0f) return;
+				PauseTimeLeft = 0f;
+				IsBurning = true;
+				Height01 = 0f;
+			}
+			if (Height01 < 1f)
+			{
+				float secondsPerFloor = IsLost ? _config.lostSpreadSecondsPerFloor : _config.spreadSecondsPerFloor;
+				Height01 = Mathf.Min(1f, Height01 + dt / (secondsPerFloor * _building.floors));
+				if (Height01 >= 1f)
+				{
+					RoofOnFire = true;
+					ReachedTop?.Invoke(this);
+				}
+			}
+			UpdateBand();
+		}
+
+		/// <summary>Ignored if lost or below extinguishMinWater01. Otherwise the fire goes out for maxStopFireTime.</summary>
+		public void Extinguish(float amount01)
+		{
+			if (_config == null || IsLost || amount01 < _config.extinguishMinWater01) return;
+			_delayLeft = 0f;
+			Height01 = 0f;
+			IsBurning = false;
+			RoofOnFire = false;
+			PauseTimeLeft = _config.maxStopFireTime;
+			UpdateBand();
+		}
+
+		/// <summary>Fire resumes from its current height at the lost speed and ignores water forever.</summary>
+		public void SetLost()
+		{
+			IsLost = true;
+			_delayLeft = 0f;
+			PauseTimeLeft = 0f;
+			if (_config != null) IsBurning = true;
+			UpdateBand();
+		}
+
+		/// <summary>Burn band contact: anything killable dies while the side burns.</summary>
+		public void ReportEnter(Collider other) => Burn(other);
+		public void ReportStay(Collider other) => Burn(other);
+
+		private void Burn(Collider other)
+		{
+			if (!IsBurning || Height01 <= 0f) return;
+			// TODO Phase 3: humans (attached or not) are the only IKillable that matters here.
+			var killable = other.GetComponentInParent<IKillable>();
+			if (killable != null) killable.Kill();
+		}
+
+		private void UpdateBand()
+		{
+			if (burnBand == null || _building == null) return;
+			float h = Height01 * TotalHeight;
+			float width = waterCatch != null ? waterCatch.size.x : burnBand.size.x;
+			burnBand.isTrigger = true;
+			burnBand.size = new Vector3(width, h, _building.burnTriggerDepth);
+			burnBand.center = new Vector3(0f, h * 0.5f, _building.burnTriggerDepth * 0.5f);
+			burnBand.enabled = IsBurning && Height01 > 0f;
+		}
 	}
 }

@@ -13,6 +13,8 @@ namespace FlameAndBlame.Fire
 		[SerializeField] private FireSide[] sides = new FireSide[4];
 		[SerializeField] private GroundFireZone[] groundZones;
 
+		private bool _allBurningRaised;
+
 		public IReadOnlyList<FireSide> Sides => sides;
 		public int SidesNotOnFire
 		{
@@ -20,8 +22,32 @@ namespace FlameAndBlame.Fire
 		}
 		public event Action AllSidesBurning;
 
-		public void Initialize() { }
+		public void Initialize()
+		{
+			foreach (var s in sides)
+			{
+				if (s == null) continue;
+				s.Initialize(_config);
+				s.ApplyBuilding(_building);
+				s.ReachedTop += OnSideReachedTop;
+			}
+			if (groundZones != null)
+				foreach (var z in groundZones) if (z != null) z.Initialize(_config);
+		}
+
 		public void SetAllLost() { foreach (var s in sides) if (s != null) s.SetLost(); }
-		private void RaiseAllSidesBurning() => AllSidesBurning?.Invoke();
+
+		private void OnSideReachedTop(FireSide _)
+		{
+			if (_allBurningRaised) return;
+			foreach (var s in sides) if (s == null || s.Height01 < 1f) return;
+			_allBurningRaised = true;
+			AllSidesBurning?.Invoke();
+		}
+
+		private void OnDestroy()
+		{
+			foreach (var s in sides) if (s != null) s.ReachedTop -= OnSideReachedTop;
+		}
 	}
 }

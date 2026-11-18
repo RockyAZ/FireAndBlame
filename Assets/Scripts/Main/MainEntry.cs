@@ -25,10 +25,10 @@ namespace FlameAndBlame.Main
 		[SerializeField] private PlayerControlSource playerControl;
 		[SerializeField] private HeliController heli;
 		[SerializeField] private Cup cup;
-		[SerializeField] private HumansSystem humans;
-		[SerializeField] private FireSystem fire;
-		[SerializeField] private GameManager game;
-		[SerializeField] private HudController hud;
+		[SerializeField] private HumansSystem humans;   // Phase 3
+		[SerializeField] private FireSystem fire;       // Phase 2
+		[SerializeField] private GameManager game;      // Phase 4
+		[SerializeField] private HudController hud;     // Phase 4
 		[SerializeField] private TestModeController testMode; // optional
 
 		private Context _ctx;
@@ -37,19 +37,30 @@ namespace FlameAndBlame.Main
 		{
 			_ctx = new Context();
 			var injector = new Injector(_ctx);
-			_ctx.Install(injector, heliConfig, cupConfig, humanConfig, fireConfig, buildingConfig, gameRulesConfig,
-				heli, cup, humans, fire, game, hud);
-			_ctx.InstallByType(playerControl, typeof(IControlSource));
+			_ctx.Install(injector);
+			// Unassigned objects are skipped with a warning, so a partially built scene still starts.
+			// A system that needs a skipped object throws KeyNotFoundException at ApplyInstall.
+			Add(heliConfig, "heliConfig"); Add(cupConfig, "cupConfig"); Add(humanConfig, "humanConfig");
+			Add(fireConfig, "fireConfig"); Add(buildingConfig, "buildingConfig"); Add(gameRulesConfig, "gameRulesConfig");
+			Add(heli, "heli"); Add(cup, "cup"); Add(humans, "humans"); Add(fire, "fire"); Add(game, "game"); Add(hud, "hud");
+			if (playerControl != null) _ctx.InstallByType(playerControl, typeof(IControlSource));
+			else Debug.LogWarning("MainEntry: playerControl is not assigned, skipped.");
 			if (testMode != null) _ctx.Install(testMode);
 			_ctx.ApplyInstall();
 
-			fire.Initialize();
-			humans.Initialize();
-			cup.Initialize();
-			heli.Initialize();
-			game.Initialize();
-			hud.Initialize();
+			if (fire != null) fire.Initialize();
+			if (humans != null) humans.Initialize();
+			if (cup != null) cup.Initialize();
+			if (heli != null) heli.Initialize();
+			if (game != null) game.Initialize();
+			if (hud != null) hud.Initialize();
 			if (testMode != null) testMode.Initialize();
+		}
+
+		private void Add(Object obj, string field)
+		{
+			if (obj != null) _ctx.Install(obj);
+			else Debug.LogWarning("MainEntry: " + field + " is not assigned, skipped.");
 		}
 
 		private void OnDestroy() => _ctx?.Dispose();

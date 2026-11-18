@@ -19,5 +19,18 @@ namespace FlameAndBlame.Heli
 		[Tooltip("Rigidbody linear damping.")] public float linearDrag = 0.3f;
 		[Tooltip("Rigidbody angular damping.")] public float angularDrag = 1.5f;
 		[Tooltip("Rigidbody mass [kg].")] public float rigidbodyMass = 10f;
+
+		[Header("Camera")]
+		[Tooltip("Orbit yaw per mouse pixel [deg/px].")] public float cameraYawSensitivity = 0.15f;
+		[Tooltip("Orbit pitch per mouse pixel [deg/px].")] public float cameraPitchSensitivity = 0.15f;
+		[Tooltip("Lowest camera pitch, negative = below the heli [deg].")] public float cameraMinPitch = -30f;
+		[Tooltip("Highest camera pitch [deg].")] public float cameraMaxPitch = 75f;
+		[Tooltip("Start pitch [deg].")] public float cameraDefaultPitch = 20f;
+		[Tooltip("Closest zoom distance [m].")] public float cameraMinDistance = 6f;
+		[Tooltip("Farthest zoom distance [m].")] public float cameraMaxDistance = 30f;
+		[Tooltip("Start distance [m].")] public float cameraDefaultDistance = 14f;
+		[Tooltip("Meters per scroll unit (a wheel notch is often 120 units).")] public float cameraZoomSpeed = 0.01f;
+		[Tooltip("Zoom smoothing time [s].")] public float cameraZoomSmoothTime = 0.15f;
+		[Tooltip("Camera follow position damping [s].")] public float cameraFollowDamping = 0.3f;
 	}
 }

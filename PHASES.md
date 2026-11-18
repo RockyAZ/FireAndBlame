@@ -37,7 +37,7 @@ Output: PoolZone, Cup.FillTick, WaterDrop, Cup.Tug dumping water, FireSide (grow
 Prompt:
 ```
 Read CLAUDE.md, GAME_DESIGN.md, TASKS.md, PROGRESS.md. Phase 2 only.
-gameplay-coder: PoolZone, WaterDrop, Cup water and Tug, FireSide, RoofZone, GroundFireZone (without human logic yet; leave a TODO that calls Human only through the contract).
+gameplay-coder: Use Cinemachine to make camera follow a helicopter. Camera controller class gets mouse movement inputs from the class responsible for inputs  and moves camera around heli and above below heli, but it is always looking at the heli. Scrolling wheel zooms camera closer and farther. PoolZone, WaterDrop, Cup water and Tug, FireSide, RoofZone, GroundFireZone (without human logic yet; leave a TODO that calls Human only through the contract).
 compiler. scene-builder: Building (5 floors, 4 sides each with FireSide and a burn trigger), Roof with 4 RoofZones, Pool with PoolZone on the Water layer, GroundFire triggers. compiler. playtester: fill in pool, dump on a side extinguishes it for maxStopFireTime then fire restarts, partial water does not extinguish, a side at the top sets RoofOnFire.
 Update PROGRESS.md.
 ```

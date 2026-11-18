@@ -31,5 +31,30 @@ Gate: compile clean (0 errors, 0 warnings), bootstrap ran, tags, layers and conf
 - The third-party package `com.wooshii.hierarchydecorator` logged older CS0246 `EntityId` errors in Editor.log. It is not part of the project asmdefs and did not appear in the current compile.
 - Stubs not in the contract that scene-builder must assign: `Cup.humanAnchor`, `Cup.bowlBody`, `FireSide.side`, `RoofZone.fireSide`, and the HUD references.
 
-## Phase 1: NEXT (helicopter, cup, test mode skeleton)
-Start with **P1-1 HeliController + PlayerControlSource** (gameplay-coder). Then P1-2 RotorHazard/Crash, P1-3 Cup chain + acceleration, P1-4 Testing skeleton, P1-5 MainEntry wiring check, P1-6 scene (scene-builder) and P1-7 HeliTests (playtester: `heli_smooth_accel`, `heli_yaw_drift`, `heli_rotor_crash`, `testmode_toggle`). See TASKS.md for files and checks.
+## Phase 1: DONE (2026-11-17)
+
+Gate: compile clean (0 errors, 0 warnings), Main.unity plays with no errors (only the 4 expected MainEntry "skipped" warnings), all 5 HeliTests PASS. Two fix rounds were needed.
+
+### Done
+- **P1-1 HeliController**: clamped acceleration (|dv| <= maxAcceleration*dt per step in both modes), Perlin yaw drift (also in test mode), move relative to yaw, gravity off; mass, damping and interpolation are applied from HeliConfig in Initialize. Public API used by tests: `Velocity`, `LastAcceleration`, `IsTestMode`, `ControlSource`. Test mode integrates its own velocity and moves with MovePosition/MoveRotation, then hands the velocity back to the Rigidbody on exit. Crash: gravity on, damping 0, stops driving; in test mode it only sets the flag and fires the event.
+- **PlayerControlSource / ScriptedControlSource**: unchanged from Phase 0. They were already correct.
+- **P1-2 RotorHazard**: `ReportHit` ignores triggers, the tags Cup/Human/Heli/WaterDrop and anything under the same heli. Otherwise it calls `Crash()`.
+- **P1-3 Cup**: Initialize builds `segmentCount` ConfigurableJoints. Runtime segments live under a `CupChain` root, and the bowl is the last segment (it is reparented there). `Joints` is exposed. `Acceleration` is the low-passed second derivative of the bowl position. In test mode the chain follows the heli rigidly. Water, grab and Tug are still stubs.
+- **P1-4 Testing**: TestModeController (`EnterAll/ExitAll`, `Scripted`, `IsActive`, `Actors`), ScenarioRunner (`Register/Run/RunAll`, static `Pass/Fail/Check`).
+- **P1-5 MainEntry**: installs and initializes only the assigned objects and warns for the rest. A missing dependency still throws KeyNotFoundException.
+- **P1-6 Scene** `Assets/Scenes/Main.unity`: MainEntry; Game/Environment/Ground (layer Ground); Game/Systems (empty); Game/Actors/Heli (Heli layer/tag, Body, MainRotor and TailRotor on Rotors/Rotor with RotorHazard, Cup with Bowl (Cup/Cup) holding HumanAnchor and the GrabZone trigger (CupGrabZone)); camera, light; inactive TestHarness. Every MainEntry config field and the heli, cup, playerControl and testMode fields are assigned.
+- **P1-7 Tests** `Assets/Tests/PlayMode/HeliTests.cs`: `[TEST] heli_smooth_accel PASS`, `heli_smooth_accel_testmode PASS`, `heli_yaw_drift PASS`, `heli_rotor_crash PASS`, `testmode_toggle PASS`.
+
+### Fix rounds
+1. heli_smooth_accel failed: on step 1 the chain jolted the heli by |dv| = 4.24 m/s. Chain segments are now built at the heli's rotation, and a new `CupConfig.heliIsolationMassScale` (default 100) was added for joint 0.
+2. That made things worse (31 m/s), because `Joint.connectedMassScale` scales the INVERSE mass. Fixed to `connectedMassScale = 1 / heliIsolationMassScale`. Worst step is now 0.119 against the 0.12 limit, and the heli sags only 0.05 m in 3 s from the cup's weight.
+
+### Known notes
+- The heli_smooth_accel margin is thin (0.119 vs 0.12). Raising `heliIsolationMassScale` or lowering the chain masses would widen it.
+- heli_yaw_drift depends on the random Perlin seed. Runs gave 1.2 to 25 deg over 10 s, and the test's 0.5 deg minimum could fail on a very quiet seed. Consider a fixed seed in test mode.
+- Build Settings still has SampleScene at index 0 (Main.unity is index 1). Remove it or reorder.
+- Cup.dropPrefab and MainEntry humans/fire/game/hud are empty until Phases 2 to 4.
+- The CLI rejects `--caller`/`--skill`. In Git Bash, use `MSYS_NO_PATHCONV=1` for hierarchy paths.
+
+## Phase 2: NEXT (pool, water, building, fire)
+Start with **P2-1 Pool and water** (gameplay-coder). See TASKS.md.

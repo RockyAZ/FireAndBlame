@@ -24,6 +24,7 @@ namespace FlameAndBlame.Rescue
 		[Tooltip("Bowl mass [kg].")] public float bowlMass = 2f;
 		[Tooltip("Chain segment mass [kg].")] public float segmentMass = 0.5f;
 		[Tooltip("Smoothing of bowl acceleration [s].")] public float accelerationSmoothing = 0.1f;
+		[Tooltip("Mass scale of the heli in the first chain joint; large values stop the chain from pushing the heli.")] public float heliIsolationMassScale = 100f;
 		[Tooltip("Lifetime of a dumped water drop [s].")] public float dropLifetime = 6f;
 	}
 }
