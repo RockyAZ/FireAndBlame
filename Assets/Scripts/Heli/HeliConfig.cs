@@ -11,7 +11,7 @@ namespace FlameAndBlame.Heli
 		[Tooltip("Seconds for input to return to zero.")] public float inputFallTime = 0.9f;
 		[Tooltip("How aggressively velocity chases the target [1/s].")] public float velocityResponse = 1.5f;
 		[Tooltip("Acceleration cap [m/s^2].")] public float maxAcceleration = 6f;
-		[Tooltip("Top Q/E turn rate [deg/s].")] public float maxYawRate = 60f;
+		[Tooltip("Top Z/X turn rate [deg/s].")] public float maxYawRate = 60f;
 		[Tooltip("Strength of random yaw push [rad/s^2].")] public float yawDriftTorque = 0.6f;
 		[Tooltip("How fast the drift changes [Hz].")] public float driftNoiseFrequency = 0.25f;
 		[Tooltip("Pull of pitch and roll back to level [1/s^2].")] public float levelingStrength = 2f;
@@ -19,6 +19,12 @@ namespace FlameAndBlame.Heli
 		[Tooltip("Rigidbody linear damping.")] public float linearDrag = 0.3f;
 		[Tooltip("Rigidbody angular damping.")] public float angularDrag = 1.5f;
 		[Tooltip("Rigidbody mass [kg].")] public float rigidbodyMass = 10f;
+
+		[Header("Auto align")]
+		[Tooltip("Heli turns (around world up only) to face the camera direction; Z/X are ignored while aligning.")] public bool autoAlignToCamera = true;
+		[Tooltip("Top auto-align turn rate [deg/s].")] public float alignMaxYawRate = 90f;
+		[Tooltip("Desired turn rate per degree of heading error [1/s].")] public float alignGain = 3f;
+		[Tooltip("Smoothing time of the align turn rate [s].")] public float alignSmoothTime = 0.25f;
 
 		[Header("Camera")]
 		[Tooltip("Orbit yaw per mouse pixel [deg/px].")] public float cameraYawSensitivity = 0.15f;

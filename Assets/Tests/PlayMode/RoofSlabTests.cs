@@ -267,7 +267,8 @@ namespace FlameAndBlame.Tests.PlayMode
             {
                 string t = hint.ShownText ?? "";
                 Debug.Log($"[TEST-INFO] {n} ShownText='{t}'");
-                if (!t.Contains("Z/X")) fail = $"ShownText lacks 'Z/X': '{t}'";
+                // Phase 6: Z/X turning replaced by auto-align, so the hint says "Heli faces camera" instead of Z/X.
+                if (!t.Contains("faces camera")) fail = $"ShownText lacks 'faces camera': '{t}'";
                 else if (t.Contains("Q/E")) fail = $"ShownText still mentions 'Q/E': '{t}'";
                 else if (System.Text.RegularExpressions.Regex.IsMatch(t, @"(^|[^A-Za-z])[QE]([^A-Za-z]|$)")) fail = $"ShownText mentions Q or E key: '{t}'";
             }

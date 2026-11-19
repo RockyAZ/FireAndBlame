@@ -156,12 +156,11 @@ Step 7, main agent: update PROGRESS.md, and tell me what to check by eye and whi
 ```
 Read CLAUDE.md, GAME_DESIGN.md, TASKS.md and PROGRESS.md. Phase 6 only. Use the subagents.
 
-Step 1, gameplay-coder: write GameManager, HumanStrengthBar and ResultPanel. WaterGauge: the tank shading is the water indicator and near it there is also a 0-100% world-space percentage indication. Win loose condition. Win score (depends on how many humans survived)
+Step 1, gameplay-coder: Change heli fly - it auto-aligns with camera view so the face of heli is looking along with camera look vector, heli makes rotation to align with camera only around up axis.  write GameManager, HumanStrengthBar and ResultPanel. WaterGauge: the tank shading is the water indicator and near it there is also a 0-100% world-space percentage indication. Win loose condition. Win score (depends on how many humans survived). Separate indicator showing how fast cup is moving so player understands why humans looses strength.
 
 Step 2, compiler: check that the project compiles.
 
-Step 3, scene-builder: build the result panel on the existing Canvas, add a world-space strength bar to each human, and wire GameManager. Assign the fields. WaterGauge: the tank shading is the water indicator and near it there is also a 0-100% world-space percentage indication.
-
+Step 3, scene-builder: build the result panel on the existing Canvas, add a world-space strength bar to each human, and wire GameManager. Assign the fields. WaterGauge: the tank shading is the water indicator and near it there is also a 0-100% world-space percentage indication. Separate indicator showing how fast cup is moving so player understands why humans looses strength.
 
 Step 4, compiler: check that the project compiles.
 

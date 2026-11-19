@@ -98,10 +98,14 @@ Initialize(): subscribes to `heli.Crashed`, `fire.AllSidesBurning`, `humans.AnyS
 
 ### UI (UI)
 Read events only, no polling.
-- `HudController`: [Inject] Cup, HumansSystem, GameManager. Initialize(): hands WaterGauge to `cup.WaterChanged`, pairs serialized `HumanStrengthBar[]` with `humans.Humans` by index, passes `ResultChanged` to ResultPanel.
-- `WaterGauge`: Image fill = Water01, optional "FULL" tint at `IsFull`.
-- `HumanStrengthBar`: world-space, follows its human (parented under it), visible only while State is RescuedHanging or SwimmingInTank, updated from `Human.StrengthChanged` and `StateChanged`.
-- `ResultPanel`: hidden at start; on Won/Lost shows result, score, rescued/total, and a Restart button (reloads the active scene).
+- `HudController`: [Inject] Cup, HumansSystem, GameManager, HumanConfig. Initialize(): binds WaterGauge and CupMotionIndicator to the cup, binds the `HumanStrengthBar` found on each spawned human (bar is part of HumanPrefab), passes `ResultChanged` to ResultPanel.
+- `WaterGauge`: world-space percentage label that follows the bowl; updated from `cup.WaterChanged`, tinted at `IsFull`. The tank shading is the main indicator.
+- `CupMotionIndicator`: world-space shake meter beside the cup (|Cup.Acceleration| polled each frame, bar full at 2x `accelerationThreshold`, tick at the threshold, green below and red above, dim when nothing hangs). Explains why hanging humans lose strength.
+- `HumanStrengthBar`: world-space, a child of each human on the prefab, billboarded to the camera, visible only while RescuedHanging, updated from `Human.StrengthChanged` and `StateChanged`.
+- `ResultPanel`: hidden at start; on Won/Lost shows title, score, rescued/total, deaths, and a Restart button (reloads the active scene).
+
+### Heli auto-align (Heli)
+`HeliCommand.FaceWorld` = flattened camera forward. With `autoAlignToCamera` the heli yaws around world up toward it: desired rate = clamp(angle * alignGain, +-alignMaxYawRate), closed with `alignSmoothTime`. Z/X are ignored while aligning; yaw drift remains a disturbance. No pitch or roll is introduced. Without a request (zero FaceWorld) or with the flag off, Z/X plus drift apply.
 
 ### Testing (Testing)
 See section 6.
@@ -274,7 +278,7 @@ These are look values; the artist may tune them freely.
 
 ### UIConfig and ControlsHintView (UI)
 `UIConfig` fields and defaults in section 7. The text lists the real controls, taken from `PlayerControlSource` and the camera: WASD move (relative to the camera), Space up, Left Ctrl down, Z/X turn, F tug (drops water and releases humans), mouse look, wheel zoom.
-`ControlsHintView : MonoBehaviour` (`[Inject] UIConfig`, `Initialize()` called by MainEntry after `hud`): finds or creates (serialized) a text component on the Canvas, sets text = `controlsHintText`, font size = `hintFontSize`, anchors it to the top-right corner (anchor and pivot (1,1), anchoredPosition (-margin.x, -margin.y)), right aligned, no raycast target. Uses `TextMeshProUGUI` when TMP Essential Resources exist. If not and they cannot be imported by an Editor command (`TMP_PackageResourceImporter`/menu), fall back to `UnityEngine.UI.Text` with `Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")`, and report it. HudController stays optional; `ControlsHintView` does not depend on it.
+`ControlsHintView : MonoBehaviour` (`[Inject] UIConfig`, `Initialize()` called by MainEntry after `hud`): finds or creates (serialized) a text component on the Canvas, sets text = `controlsHintText`, font size = `hintFontSize`, anchors it to the top-right corner (anchor and pivot (1,1), anchoredPosition (-margin.x, -margin.y)), right aligned, no raycast target. Uses `TextMeshProUGUI` only (all text in the project is TextMeshPro; never legacy Text). TMP Essential Resources must be imported. HudController stays optional; `ControlsHintView` does not depend on it.
 
 ## 10. Water ball and roof slabs (Phase 4)
 The water ball drop is ALREADY IMPLEMENTED; the description below is kept for reference. The Phase 4 work is the roof slab rework (section 1, RoofSlab) and the camera-relative movement (sections 1 and 5). The roof is four hand-made, non-overlapping RoofSlab boxes of different sizes, one per side, user-built: sizes are kept. `RoofZone` and `RoofSectorMesh` are deleted.

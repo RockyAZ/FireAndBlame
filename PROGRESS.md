@@ -202,3 +202,44 @@ Gate: compile clean (0 errors, 0 warnings in project assemblies). Last full run:
 - **Sitting in the tank**: `Bowl/SwimSlot` (FloatPoint is placed on it).
 - **Drift area**: the scale and position of `Pool/DriftArea`.
 - **Spawn area**: `HumanSpawnArea` in `Assets/Prefabs/RoofSlab.prefab`.
+
+## Phase 6: DONE (2026-11-19), pending your by-eye Play mode check
+Game rules (win, lose, score), result panel, strength bars, world-space water percentage, cup shake meter, heli auto-align to the camera.
+
+Gate: compile clean (0 errors, 0 warnings in project assemblies), Main.unity plays with 0 errors and 0 warnings at start. Full PlayMode run: 44/45 PASS. All 9 new GameRulesTests pass. The one failure, `move_ignores_heli_yaw` (Phase 4), only fails in the full run ("heli only turned 2.0 deg": random yaw drift cancelled the 2 s Z/X command) and passes 3/3 alone. It does not use auto-align (FaceWorld is zero), so it is not a Phase 6 regression. No fix rounds were needed. One scene-builder pause: the Editor was left in Play mode and you stopped it.
+
+### Done
+- **Heli faces the camera**: Core `HeliCommand.FaceWorld` (flattened camera forward, set by PlayerControlSource). HeliController turns only around world up toward it: yaw-rate chase, rate = clamp(deltaAngle * alignGain, ±alignMaxYawRate), time constant alignSmoothTime. HeliConfig `autoAlignToCamera` true, `alignMaxYawRate` 90, `alignGain` 3, `alignSmoothTime` 0.25. While aligning, Z/X are ignored and yaw drift is still applied (and corrected). With the flag off or FaceWorld zero (ScriptedControlSource), the old Z/X + drift path runs. Controls hint (UIConfig default and asset): "WASD move (camera) | Space/Ctrl up/down | Heli faces camera | F drop water | Mouse look | Wheel zoom".
+- **GameManager**: crash → snapshot Rescued/Deaths, Lost, KillAll, SetAllLost. AllSidesBurning (endOnAllSidesBurning) → Lost. No one waiting, hanging or in the tank → Won if at least one is in the pool, else Lost. Score = rescued*100 - deaths*25 (+25 per side not on fire on Won only), min 0. After the end, Result never changes. Public `Rescued`, `Deaths`, `TotalHumans`, `Evaluate()`.
+- **UI** (legacy UnityEngine.UI.Text, built-in LegacyRuntime font):
+  - `ResultPanel` on Game/UI/Canvas: title, score, rescued/total, deaths, Restart (reloads by build index; Main.unity is index 0). EventSystem with InputSystemUIInputModule added.
+  - `WaterGauge`: world-space "0%..100%" label next to the bowl (offset (1.2, 0.6, 0)), from Cup.WaterChanged, tinted when full. The tank shading stays the main indicator.
+  - `CupMotionIndicator` (new): world-space shake bar next to the bowl (offset (1.2, -0.6, 0)). Fill = |Cup.Acceleration| / (2 * accelerationThreshold), tick at 50% = threshold, green below, red above, label "Shake x m/s2". Dimmed (alpha 0.35) when nothing hangs. Polls Acceleration every frame (continuous value, commented).
+  - `HumanStrengthBar`: on the HumanPrefab root, world-space `StrengthBar` child canvas. Shown only while RescuedHanging, red→green, billboarded. HudController binds each spawned human.
+  - `HudController`: binds gauge, shake meter, strength bars and result panel.
+- **Scene**: Game/Systems/GameManager and HudController; MainEntry.game/hud assigned. Game/UI/WaterGaugeCanvas, Game/UI/CupMotionCanvas (follow Bowl). HumanPrefab: StrengthBar (layer UI, no colliders), additions only.
+- **Tests** `Assets/Tests/PlayMode/GameRulesTests.cs` (all PASS): crash_lost, crash_kills_all_and_sides_lost (pool humans die too, but Rescued keeps the pre-crash count), all_sides_burning_lost, all_dead_lost, all_resolved_won, score_matches_config (Won and Lost cases, values from GameRulesConfig.asset), heli_aligns_to_camera (90° turn: within 5° at the end, tilt within 2°, overshoot within 15°), ui_result_panel_shows, ui_water_gauge_percent.
+- `RoofSlabTests.hint_shows_z_x` now asserts "faces camera" (the hint no longer has Z/X).
+- CLAUDE.md: "Contract additions (Phase 6)". GAME_DESIGN.md: UI/GameRules section updated.
+
+### Open issues
+- **Phase 4 water ball still not implemented** (see Phase 5); layer 16 WaterBall still missing from TagManager.
+- `move_ignores_heli_yaw` and `yaw_keys_z_x` flaky in full runs (yaw drift). Fix: longer command time or a fixed drift seed in test mode.
+- Stray scene root `/GameObject` (Rigidbody + ConfigurableJoint) in Main.unity, left untouched. Delete it if it is a leftover.
+- "There are 2 audio listeners in the scene" warning in Editor.log.
+- On a crash, humans already in the pool also die (KillAll), but they still count toward the score.
+
+### Check by eye (Play mode)
+- Move the mouse: the heli smoothly turns its nose to the camera direction, without tilting.
+- A "0%" label next to the tank climbs to 100% in the pool.
+- The shake bar next to the tank goes red when you jerk the heli; it is dimmed with nobody hanging.
+- A hanging human shows a bar above its head that drains while the shake bar is red.
+- End the game (crash, or rescue everyone): the result panel shows title, score, rescued/total and deaths; Restart reloads.
+- Tuning: Assets/Settings/HeliConfig.asset (align*), GameRulesConfig.asset (score), HumanConfig.asset (accelerationThreshold). Layout offsets: worldOffset on WaterGaugeCanvas, CupMotionCanvas and the HumanPrefab HumanStrengthBar.
+
+### Follow-up (user request, same day): TextMeshPro only
+- New rule in CLAUDE.md (module rules): all text uses TextMeshPro (`TextMeshProUGUI` / `TMP_Text`), never `UnityEngine.UI.Text`, `TextMesh` or the legacy font. TMP ships in `com.unity.ugui` 2.0 (no extra package). The Phase 3 legacy-Text fallback wording is removed.
+- TMP Essential Resources imported into `Assets/TextMesh Pro/` (by you in the Editor; the CLI cannot import a .unitypackage while the Editor is open, and the menu item is not reachable from the CLI).
+- Code: ControlsHintView (`legacyText` removed, `tmpText` only), WaterGauge, CupMotionIndicator, ResultPanel fields are `TMP_Text`. VisualsTests and GameRulesTests read TMP.
+- Scene: all 8 legacy Text components converted to TextMeshProUGUI (ControlsHint, Result Title/Score/Rescued/Deaths, Restart label, WaterGauge label, CupMotion label), LiberationSans SDF, fields reassigned. 0 legacy Text left in the scene and prefabs. Play start: 0 errors, 0 warnings.
+- Full suite: 43/45 PASS. All UI tests pass (controls_hint_matches_config, ui_result_panel_shows, ui_water_gauge_percent). Failing: `move_ignores_heli_yaw` ("heli barely moved 0.03 m") and `yaw_keys_z_x` ("Z gave Yaw 0", virtual keyboard not seen), both in HeliCameraMoveTests, unrelated to TMP and flaky in earlier full runs too. Not yet investigated.

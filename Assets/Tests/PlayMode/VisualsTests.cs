@@ -185,11 +185,8 @@ namespace FlameAndBlame.Tests.PlayMode
             {
                 if (hint.ShownText != cfg.controlsHintText) fail = $"ShownText '{hint.ShownText}' != config '{cfg.controlsHintText}'";
                 var tmp = hint.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
-                var legacy = hint.GetComponentInChildren<UnityEngine.UI.Text>(true);
                 RectTransform rt = null; string shown = null;
-                if (tmp != null && tmp.enabled && tmp.gameObject.activeInHierarchy) { rt = tmp.rectTransform; shown = tmp.text; }
-                else if (legacy != null) { rt = legacy.rectTransform; shown = legacy.text; }
-                else if (tmp != null) { rt = tmp.rectTransform; shown = tmp.text; }
+                if (tmp != null) { rt = tmp.rectTransform; shown = tmp.text; }
                 if (fail == null && rt == null) fail = "no text component under ControlsHintView";
                 if (fail == null && shown != cfg.controlsHintText) fail = $"text component shows '{shown}' != config";
                 if (fail == null && (rt.anchorMin != Vector2.one || rt.anchorMax != Vector2.one)) fail = $"anchors {rt.anchorMin}/{rt.anchorMax}, expected (1,1) top-right";

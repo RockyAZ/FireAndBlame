@@ -12,6 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e7a7f60741e1c7145901bbc9592896a0, type: 3}
   m_Name: UIConfig
   m_EditorClassIdentifier:
-  controlsHintText: 'WASD move (camera) | Space/Ctrl up/down | Z/X turn | F drop water | Mouse look | Wheel zoom'
+  controlsHintText: 'WASD move (camera) | Space/Ctrl up/down | Heli faces camera | F drop water | Mouse look | Wheel zoom'
   hintFontSize: 22
   hintMargin: {x: 20, y: 20}

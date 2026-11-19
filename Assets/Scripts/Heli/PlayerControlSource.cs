@@ -56,6 +56,7 @@ namespace FlameAndBlame.Heli
 			{
 				Move = move,
 				MoveWorld = Vector3.ClampMagnitude(forward * move.y + right * move.x, 1f),
+				FaceWorld = forward,
 				Vertical = _vertical.ReadValue<float>(),
 				Yaw = _yaw.ReadValue<float>(),
 				TugPressed = _tug.WasPressedThisFrame()

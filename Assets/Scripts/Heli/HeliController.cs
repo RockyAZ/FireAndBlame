@@ -97,8 +97,19 @@ namespace FlameAndBlame.Heli
 
 			float w = _testMode ? _yawRate : Body.angularVelocity.y;
 			float noise = Mathf.PerlinNoise(Time.time * _config.driftNoiseFrequency, _noiseSeed) * 2f - 1f;
-			float yawAccel = (_yawInput * _config.maxYawRate * Mathf.Deg2Rad - w) * _config.velocityResponse
-				+ noise * _config.yawDriftTorque;
+			float yawAccel;
+			Vector3 face = new Vector3(cmd.FaceWorld.x, 0f, cmd.FaceWorld.z);
+			if (_config.autoAlignToCamera && face.sqrMagnitude > 1e-4f)
+			{
+				// Turn rate toward the camera heading, closed with alignSmoothTime (drift stays a disturbance).
+				Vector3 fwd = Vector3.ProjectOnPlane(Body.rotation * Vector3.forward, Vector3.up);
+				float delta = fwd.sqrMagnitude > 1e-4f ? Vector3.SignedAngle(fwd, face, Vector3.up) : 0f;
+				float rate = Mathf.Clamp(delta * _config.alignGain, -_config.alignMaxYawRate, _config.alignMaxYawRate) * Mathf.Deg2Rad;
+				yawAccel = (rate - w) / Mathf.Max(_config.alignSmoothTime, 0.01f) + noise * _config.yawDriftTorque;
+			}
+			else
+				yawAccel = (_yawInput * _config.maxYawRate * Mathf.Deg2Rad - w) * _config.velocityResponse
+					+ noise * _config.yawDriftTorque;
 
 			if (_testMode)
 			{
