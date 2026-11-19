@@ -1,4 +1,5 @@
 using FlameAndBlame.Core;
+using FlameAndBlame.VFX;
 using UnityEngine;
 
 namespace FlameAndBlame.Fire
@@ -6,6 +7,9 @@ namespace FlameAndBlame.Fire
 	/// <summary>Trigger on layer FireZone, tag GroundFire. Kills anything killable that touches it.</summary>
 	public class GroundFireZone : MonoBehaviour
 	{
+		[Tooltip("GroundFireEffect scene child instance (optional).")]
+		[SerializeField] private GroundFireEffect groundFireEffect;
+
 		private FireConfig _config;
 		private Collider _collider;
 
@@ -13,6 +17,7 @@ namespace FlameAndBlame.Fire
 		{
 			_config = config;
 			_collider = GetComponent<Collider>();
+			if (groundFireEffect != null) groundFireEffect.Play();
 		}
 
 		/// <summary>Only when groundFirePermanent is false: the zone is switched off for maxStopFireTime.</summary>
@@ -20,6 +25,7 @@ namespace FlameAndBlame.Fire
 		{
 			if (_config == null || _config.groundFirePermanent || amount01 < _config.extinguishMinWater01) return;
 			if (_collider != null) _collider.enabled = false;
+			if (groundFireEffect != null) groundFireEffect.Stop();
 			CancelInvoke(nameof(Restore));
 			Invoke(nameof(Restore), _config.maxStopFireTime);
 		}
@@ -34,7 +40,11 @@ namespace FlameAndBlame.Fire
 			if (killable != null) killable.Kill();
 		}
 
-		private void Restore() { if (_collider != null) _collider.enabled = true; }
+		private void Restore()
+		{
+			if (_collider != null) _collider.enabled = true;
+			if (groundFireEffect != null) groundFireEffect.Play();
+		}
 
 		private void OnTriggerEnter(Collider other) => ReportEnter(other);
 		private void OnTriggerStay(Collider other) => ReportStay(other);

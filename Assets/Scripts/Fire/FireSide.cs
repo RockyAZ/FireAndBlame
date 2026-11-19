@@ -20,6 +20,12 @@ namespace FlameAndBlame.Fire
 		[Tooltip("FillEffectView on the FireOverlay child (optional).")]
 		[SerializeField] private FillEffectView wallFireView;
 
+		[Tooltip("FireEffect scene child instance (optional). Plays while IsBurning, also when the side is lost.")]
+		[SerializeField] private FireEffect fireEffect;
+		[Tooltip("SmokeEffect scene child instance (optional). Plays while IsBurning, also when the side is lost.")]
+		[SerializeField] private SmokeEffect smokeEffect;
+
+		private bool _effectsOn;
 		private FireConfig _config;
 		private BuildingConfig _building;
 		private float _delayLeft;
@@ -43,6 +49,7 @@ namespace FlameAndBlame.Fire
 			IsBurning = RoofOnFire = IsLost = false;
 			PauseTimeLeft = 0f;
 			UpdateBand();
+			SyncEffects();
 		}
 
 		public void ApplyBuilding(BuildingConfig building)
@@ -70,8 +77,18 @@ namespace FlameAndBlame.Fire
 			UpdateView();
 		}
 
+		// Edge-triggered: Play/Stop only when IsBurning changes.
+		private void SyncEffects()
+		{
+			if (IsBurning == _effectsOn) return;
+			_effectsOn = IsBurning;
+			if (fireEffect != null) { if (_effectsOn) fireEffect.Play(); else fireEffect.Stop(); }
+			if (smokeEffect != null) { if (_effectsOn) smokeEffect.Play(); else smokeEffect.Stop(); }
+		}
+
 		private void UpdateView()
 		{
+			SyncEffects();
 			if (wallFireView == null) return;
 			wallFireView.SetFill(Height01);
 			wallFireView.SetIntensity(IsBurning ? 1f : 0f);
@@ -119,6 +136,7 @@ namespace FlameAndBlame.Fire
 			RoofOnFire = false;
 			PauseTimeLeft = _config.maxStopFireTime;
 			UpdateBand();
+			SyncEffects();
 		}
 
 		/// <summary>Fire resumes from its current height at the lost speed and ignores water forever.</summary>
@@ -129,6 +147,7 @@ namespace FlameAndBlame.Fire
 			PauseTimeLeft = 0f;
 			if (_config != null) IsBurning = true;
 			UpdateBand();
+			SyncEffects();
 		}
 
 		/// <summary>Burn band contact: anything killable dies while the side burns.</summary>

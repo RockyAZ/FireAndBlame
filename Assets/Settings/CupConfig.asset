@@ -30,5 +30,11 @@ MonoBehaviour:
   humanSlotSpacing: 0.8
   bowlMass: 2
   segmentMass: 0.5
-  accelerationSmoothing: 0.1
+  shakeVelocitySmoothing: 0.15
+  accelerationSmoothing: 0.4
+  shakeMaxRawAcceleration: 15
+  shakeRiseTime: 0.8
+  shakeFallTime: 0.4
+  shakeTeleportSpeed: 40
+  grabGraceTime: 0.7
   dropLifetime: 6

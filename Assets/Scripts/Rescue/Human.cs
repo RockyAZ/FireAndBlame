@@ -1,6 +1,7 @@
 using System;
 using FlameAndBlame.Core;
 using FlameAndBlame.Fire;
+using FlameAndBlame.VFX;
 using UnityEngine;
 
 namespace FlameAndBlame.Rescue
@@ -16,6 +17,9 @@ namespace FlameAndBlame.Rescue
 		[Tooltip("Point that sits on the water line (chest). Falls back to the root.")]
 		[SerializeField] private Transform floatPoint;
 
+		[Tooltip("StunStarsEffect child of the HumanPrefab (optional).")]
+		[SerializeField] private StunStarsEffect stunStars;
+
 		private const int HitBuffer = 8;
 
 		private Rigidbody _body;
@@ -30,7 +34,7 @@ namespace FlameAndBlame.Rescue
 		private PoolZone _pool;
 		private readonly Collider[] _hits = new Collider[HitBuffer];
 		private Vector3 _target;
-		private float _retarget, _bobPhase, _floatOffsetY;
+		private float _retarget, _bobPhase, _floatOffsetY, _strengthGrace;
 		private bool _hasTarget, _started, _testMode;
 
 		public HumanState State { get; private set; }
@@ -72,6 +76,7 @@ namespace FlameAndBlame.Rescue
 			State = s;
 			IsFalling = false;
 			if (s == HumanState.Dead) { IsStunned = false; CancelInvoke(nameof(EndStun)); }
+			if (!same && stunStars != null) stunStars.Stop();   // any real state change leaves the stun visuals
 			ApplyMode();
 			if (_anim != null) _anim.Apply(s);
 			if (!same) StateChanged?.Invoke(this, s);
@@ -88,6 +93,7 @@ namespace FlameAndBlame.Rescue
 			_cup = cup;
 			_slot = slot;
 			SetStrength(1f);
+			_strengthGrace = _config != null ? _config.strengthGraceTime : 0f;
 			SetState(swim ? HumanState.SwimmingInTank : HumanState.RescuedHanging);
 		}
 
@@ -107,6 +113,7 @@ namespace FlameAndBlame.Rescue
 		{
 			if (State == HumanState.Dead || _config == null) return;
 			IsStunned = true;
+			if (stunStars != null) stunStars.Play();
 			if (_anim != null) _anim.PlayStun();
 			CancelInvoke(nameof(EndStun));
 			Invoke(nameof(EndStun), _config.stunDuration);
@@ -146,7 +153,11 @@ namespace FlameAndBlame.Rescue
 		private void FixedUpdate()
 		{
 			if (_config == null) return;
-			if (State == HumanState.RescuedHanging && _cup != null) TickStrength(Time.fixedDeltaTime, _cup.Acceleration.magnitude);
+			if (State == HumanState.RescuedHanging && _cup != null)
+			{
+				if (_strengthGrace > 0f) _strengthGrace -= Time.fixedDeltaTime;   // newly attached: no drain
+				else TickStrength(Time.fixedDeltaTime, _cup.ShakeMagnitude);
+			}
 			else if (State == HumanState.ChillingInPool && !IsFalling && _pool != null) Drift(Time.fixedDeltaTime);
 		}
 
@@ -293,6 +304,7 @@ namespace FlameAndBlame.Rescue
 		private void EndStun()
 		{
 			IsStunned = false;
+			if (stunStars != null) stunStars.Stop();
 			if (State == HumanState.Dead || _anim == null) return;
 			if (IsFalling) _anim.PlayFalling(); else _anim.Apply(State);
 		}

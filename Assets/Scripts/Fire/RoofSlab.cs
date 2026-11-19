@@ -18,7 +18,13 @@ namespace FlameAndBlame.Fire
 		[Tooltip("Unit-box transform on the top face where humans spawn (placed by hand).")]
 		[SerializeField] private Transform humanSpawnArea;
 
+		[Tooltip("FireEffect for the burning roof (optional). Plays while OnFire.")]
+		[SerializeField] private FireEffect roofFireEffect;
+		[Tooltip("SmokeEffect for the burning roof (optional). Plays while OnFire.")]
+		[SerializeField] private SmokeEffect roofSmokeEffect;
+
 		private BoxCollider _box;
+		private bool _effectsOn;
 
 		public FireSide FireSide => fireSide;
 		public FillEffectView RoofFireView => roofFireView;
@@ -65,6 +71,10 @@ namespace FlameAndBlame.Fire
 		private void Update()
 		{
 			if (roofFireView != null) roofFireView.SetFill(OnFire ? 1f : 0f);
+			if (OnFire == _effectsOn) return;   // edge-triggered
+			_effectsOn = OnFire;
+			if (roofFireEffect != null) { if (_effectsOn) roofFireEffect.Play(); else roofFireEffect.Stop(); }
+			if (roofSmokeEffect != null) { if (_effectsOn) roofSmokeEffect.Play(); else roofSmokeEffect.Stop(); }
 		}
 
 		private void OnDrawGizmos()

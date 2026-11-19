@@ -23,7 +23,15 @@ namespace FlameAndBlame.Rescue
 		[Tooltip("Distance between human slots [m].")] public float humanSlotSpacing = 0.8f;
 		[Tooltip("Bowl mass [kg].")] public float bowlMass = 2f;
 		[Tooltip("Chain segment mass [kg].")] public float segmentMass = 0.5f;
-		[Tooltip("Smoothing of bowl acceleration [s].")] public float accelerationSmoothing = 0.1f;
+		[Header("Shake measurement")]
+		[Tooltip("Low-pass time of the bowl velocity before differentiating [s].")] public float shakeVelocitySmoothing = 0.15f;
+		[Tooltip("Smoothing of bowl acceleration [s].")] public float accelerationSmoothing = 0.4f;
+		[Tooltip("Each raw acceleration sample is clamped to this [m/s^2]; one spike cannot dominate.")] public float shakeMaxRawAcceleration = 15f;
+		[Tooltip("Time for ShakeMagnitude to rise toward a higher value [s].")] public float shakeRiseTime = 0.8f;
+		[Tooltip("Time for ShakeMagnitude to fall toward a lower value [s].")] public float shakeFallTime = 0.4f;
+		[Tooltip("Bowl speed above which a position jump counts as a teleport and the measurement resets [m/s].")] public float shakeTeleportSpeed = 40f;
+		[Tooltip("No shake measured for this long after a human attaches or detaches [s].")] public float grabGraceTime = 0.7f;
+		[Header("Other")]
 		[Tooltip("Mass scale of the heli in the first chain joint; large values stop the chain from pushing the heli.")] public float heliIsolationMassScale = 100f;
 		[Tooltip("Lifetime of a dumped water drop [s].")] public float dropLifetime = 6f;
 		[Tooltip("Smoothing time of the cup water visual [s]. Visual only.")] public float fillVisualSmoothTime = 0.25f;

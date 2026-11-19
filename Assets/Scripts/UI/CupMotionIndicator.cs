@@ -40,7 +40,7 @@ namespace FlameAndBlame.UI
 			if (_cup == null) return;
 
 			// Polling is intended here: acceleration is a continuous value with no event.
-			float a = _cup.Acceleration.magnitude;
+			float a = _cup.ShakeMagnitude;
 			fill.fillAmount = Mathf.Clamp01(a / (_threshold * 2f));
 			fill.color = a > _threshold ? warnColor : okColor;
 			label.text = "Shake " + a.ToString("0.0") + " m/s²";

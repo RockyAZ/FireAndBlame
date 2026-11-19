@@ -184,6 +184,16 @@ Step 6, main agent: update PROGRESS.md.
 ```
 Read CLAUDE.md, GAME_DESIGN.md, TASKS.md and PROGRESS.md. Phase 7 only. Use the subagents.
 
+Step 0, gameplay-coder: Fix heli crash - it doesn't work. When rotor collides with building nothing happens. I want on crash loosing screen and heli breaks by parts and falls on the ground. Player looses and have to restart level. 
+
+Step 0.1, compiler: check that the project compiles and no error appears.
+
+Step 0.2, gameplay-coder: Change calculation method for cup shake, make it less rapid and more safe. SOmethimes it shows red and max shake when it isn't shaking much and when human is picked up it may imidiately waste all his strength and fall because cup is too shaky, it needs to be fixed. 
+
+Step 0.3, compiler: check that the project compiles and no error appears.
+
+Step 0.4, vfx-artist: create shader with toon like lighting model that slightly highlights mesh wireframe of rendered models, adds outline for models. Don't use geometry shaders.  In Building_Side prefab add child cubes without colliders that will look like windows. Create different materials for windows, building, roof, helicopter etc.
+
 Step 1, vfx-artist: create the effects listed in TASKS.md. Each one exposes Play() and Stop() only.
 
 Step 2, gameplay-coder: call those methods from FireSide, GroundFireZone, WaterDrop.Hit, Human.Stun and Cup.Tug.

@@ -23,7 +23,11 @@ namespace FlameAndBlame.Rescue
 		[Tooltip("FillEffectView on the bowl renderer (M_Water), optional.")]
 		[SerializeField] private FillEffectView waterView;
 
-		[Tooltip("HangSlot_1, HangSlot_2: children of the bowl on the rim. One hanging human each.")]
+		[Tooltip("Splash prefab asset spawned at the bowl when water is dumped (optional).")]
+		[SerializeField] private SplashEffect tugSplashPrefab;
+		private const float SplashFallbackLifetime = 5f;   // cleanup if the prefab does not destroy itself
+
+		[Tooltip("HangSlot_1,HangSlot_2: children of the bowl on the rim. One hanging human each.")]
 		[SerializeField] private Transform[] hangSlots;
 		[Tooltip("SwimSlot: child of the bowl inside near the top. One swimming human.")]
 		[SerializeField] private Transform swimSlot;
@@ -37,7 +41,8 @@ namespace FlameAndBlame.Rescue
 		private Vector3 _startLocal;
 		private bool _ready, _testMode;
 		private int _samples;
-		private Vector3 _lastPos, _lastVelocity;
+		private float _grace;
+		private Vector3 _lastPos, _lastVelocity, _smoothVel;
 
 		public Rigidbody Body => bowlBody;
 		public Transform HumanAnchor => humanAnchor;
@@ -45,7 +50,10 @@ namespace FlameAndBlame.Rescue
 		public bool IsEmpty => _config != null && Water01 <= _config.emptyThreshold;
 		public bool IsFull => _config != null && Water01 >= _config.fullThreshold;
 		public int AttachedCount => _slots.Count;
+		/// <summary>Smoothed, spike-clamped bowl acceleration (see UpdateAcceleration).</summary>
 		public Vector3 Acceleration { get; private set; }
+		/// <summary>Calm shake value [m/s^2]: smoothed |Acceleration| with slow rise, faster fall. Drives strength loss and the UI meter.</summary>
+		public float ShakeMagnitude { get; private set; }
 		public bool InPool { get; private set; }
 		public bool IsTestMode => _testMode;
 		/// <summary>Chain joints built by Initialize (count == CupConfig.segmentCount).</summary>
@@ -173,11 +181,11 @@ namespace FlameAndBlame.Rescue
 		{
 			if (_config == null || AttachedCount >= _config.maxHumans) return null;
 			Transform slot = FreeSlot(swim);
-			if (slot != null) _slots[h] = slot;
+			if (slot != null) { _slots[h] = slot; StartGrace(); }
 			return slot;
 		}
 
-		internal void NotifyDetached(Human h) => _slots.Remove(h);
+		internal void NotifyDetached(Human h) { if (_slots.Remove(h)) StartGrace(); }
 
 		private void Unlock() => _grabLocked = false;
 
@@ -186,6 +194,12 @@ namespace FlameAndBlame.Rescue
 		{
 			if (_config != null && !IsEmpty)
 			{
+				if (tugSplashPrefab != null)
+				{
+					var splash = Instantiate(tugSplashPrefab, bowlBody.position, Quaternion.identity);
+					splash.Play();
+					Destroy(splash.gameObject, SplashFallbackLifetime);
+				}
 				if (dropPrefab != null)
 				{
 					var drop = Instantiate(dropPrefab, bowlBody.position, Quaternion.identity);
@@ -220,6 +234,7 @@ namespace FlameAndBlame.Rescue
 		{
 			if (_testMode) return;
 			_testMode = true;
+			ResetShake();
 			_savedKinematic.Clear();
 			foreach (var rb in _segments)
 			{
@@ -241,7 +256,7 @@ namespace FlameAndBlame.Rescue
 					_segments[i].angularVelocity = Vector3.zero;
 				}
 			}
-			_samples = 0;
+			ResetShake();
 		}
 
 		private void Update()
@@ -269,23 +284,46 @@ namespace FlameAndBlame.Rescue
 		}
 
 		// Velocity from the position delta (works kinematic and dynamic), then a low-passed derivative.
+		// Calm shake measure: velocity (Rigidbody when dynamic, position delta when kinematic) is low-passed, differentiated,
+		// each raw sample is clamped, the result is low-passed again and ShakeMagnitude follows it with a slow rise and a faster fall.
 		private void UpdateAcceleration(float dt)
 		{
 			Vector3 pos = bowlBody.position;
-			if (_samples > 0)
-			{
-				Vector3 vel = (pos - _lastPos) / dt;
-				if (_samples > 1)
-				{
-					Vector3 raw = (vel - _lastVelocity) / dt;
-					float alpha = dt / (_config.accelerationSmoothing + dt);
-					Acceleration = Vector3.Lerp(Acceleration, raw, alpha);
-				}
-				_lastVelocity = vel;
-			}
-			if (_samples < 2) _samples++;
+			Vector3 delta = (pos - _lastPos) / dt;
+			Vector3 vel = bowlBody.isKinematic ? delta : bowlBody.linearVelocity;
+			bool teleport = _samples > 0 && delta.magnitude > _config.shakeTeleportSpeed;
 			_lastPos = pos;
+			_lastVelocity = vel;
+			_grace -= dt;
+			if (_samples == 0 || teleport || _grace > 0f)
+			{
+				// No valid measurement: re-baseline, no acceleration, shake decays.
+				_samples = 1;
+				_smoothVel = vel;
+				Acceleration = Vector3.zero;
+			}
+			else
+			{
+				Vector3 prev = _smoothVel;
+				_smoothVel = Vector3.Lerp(_smoothVel, vel, dt / (_config.shakeVelocitySmoothing + dt));
+				Vector3 raw = Vector3.ClampMagnitude((_smoothVel - prev) / dt, _config.shakeMaxRawAcceleration);
+				Acceleration = Vector3.Lerp(Acceleration, raw, dt / (_config.accelerationSmoothing + dt));
+			}
+			float target = Acceleration.magnitude;
+			float tau = target > ShakeMagnitude ? _config.shakeRiseTime : _config.shakeFallTime;
+			ShakeMagnitude = Mathf.Lerp(ShakeMagnitude, target, dt / (tau + dt));
 		}
+
+		/// <summary>Forgets the shake history (teleport, test mode switch, attach or detach start a grace period).</summary>
+		public void ResetShake()
+		{
+			_samples = 0;
+			_smoothVel = Vector3.zero;
+			Acceleration = Vector3.zero;
+			ShakeMagnitude = 0f;
+		}
+
+		private void StartGrace() { if (_config != null) _grace = _config.grabGraceTime; }
 
 		private ConfigurableJoint AddJoint(Rigidbody rb, Rigidbody connected, Vector3 connectedAnchor, float len)
 		{

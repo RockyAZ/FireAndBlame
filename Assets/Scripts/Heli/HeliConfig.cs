@@ -26,6 +26,12 @@ namespace FlameAndBlame.Heli
 		[Tooltip("Desired turn rate per degree of heading error [1/s].")] public float alignGain = 3f;
 		[Tooltip("Smoothing time of the align turn rate [s].")] public float alignSmoothTime = 0.25f;
 
+		[Header("Crash")]
+		[Tooltip("Random outward impulse speed given to each broken-off part [m/s].")] public float breakImpulse = 4f;
+		[Tooltip("Random spin given to each part [deg/s].")] public float breakSpin = 360f;
+		[Tooltip("Mass of each broken-off part [kg].")] public float breakPartMass = 1f;
+		[Tooltip("Seconds before debris is destroyed; 0 keeps it forever.")] public float debrisLifetime = 0f;
+
 		[Header("Camera")]
 		[Tooltip("Orbit yaw per mouse pixel [deg/px].")] public float cameraYawSensitivity = 0.15f;
 		[Tooltip("Orbit pitch per mouse pixel [deg/px].")] public float cameraPitchSensitivity = 0.15f;

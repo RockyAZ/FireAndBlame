@@ -15,9 +15,10 @@ MonoBehaviour:
   humanCount: 4
   mass: 60
   maxStrength: 100
-  accelerationThreshold: 4
-  strengthLossFactor: 6
-  strengthRecoveryPerSecond: 3
+  accelerationThreshold: 3.5
+  strengthLossFactor: 4
+  strengthRecoveryPerSecond: 5
+  strengthGraceTime: 1.5
   stunDuration: 2.5
   hangJointAngularLimitDeg: 60
   hangJointLinearLimit: 0.3

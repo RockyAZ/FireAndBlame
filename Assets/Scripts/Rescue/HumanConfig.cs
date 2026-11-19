@@ -11,9 +11,10 @@ namespace FlameAndBlame.Rescue
 
 		[Header("Strength")]
 		[Tooltip("Maximum strength.")] public float maxStrength = 100f;
-		[Tooltip("Cup acceleration above which strength drains [m/s^2].")] public float accelerationThreshold = 4f;
-		[Tooltip("Strength lost per m/s^2 over threshold per second.")] public float strengthLossFactor = 6f;
-		[Tooltip("Strength regained per second when calm.")] public float strengthRecoveryPerSecond = 3f;
+		[Tooltip("Cup ShakeMagnitude above which strength drains [m/s^2].")] public float accelerationThreshold = 3.5f;
+		[Tooltip("Strength lost per m/s^2 over threshold per second.")] public float strengthLossFactor = 4f;
+		[Tooltip("Strength regained per second when calm.")] public float strengthRecoveryPerSecond = 5f;
+		[Tooltip("After attaching, no strength drain for this long [s].")] public float strengthGraceTime = 1.5f;
 		[Tooltip("Stun duration [s].")] public float stunDuration = 2.5f;
 
 		[Header("Hang joint (tank attach point to hang slot)")]

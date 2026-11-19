@@ -259,3 +259,9 @@ Spawning: `HumansSystem` ([Inject] HumanConfig, FireSystem) serialized `Human hu
 - UI: `HumanStrengthBar.Bind(Human)` (one per HumanPrefab, bound by HudController), `WaterGauge.Bind(Cup)` (world-space, TextMeshProUGUI), `CupMotionIndicator.Bind(Cup, float threshold)` (world-space shake meter), `ResultPanel.Show(GameResult, int score, int rescued, int total, int deaths)`. HudController: [Inject] Cup, HumansSystem, GameManager, HumanConfig; serialized `waterGauge`, `motionIndicator`, `resultPanel`.
 - UIConfig default hint: "WASD move (camera) | Space/Ctrl up/down | Heli faces camera | F drop water | Mouse look | Wheel zoom".
 
+## Contract additions (Phase 7: crash, shake, effects)
+- Heli: `HeliController` forwards rotor contacts from its own OnCollisionEnter (`contact.thisCollider` with a RotorHazard) to `RotorHazard.ReportHit`. `Crash()` breaks the heli meshes into dynamic debris (not in test mode). HeliConfig: `breakImpulse`, `breakSpin`, `breakPartMass`, `debrisLifetime`.
+- Rescue: `Cup.ShakeMagnitude` (smoothed shake, used for the strength drain and the shake meter), `Cup.ResetShake()`. CupConfig: `shakeVelocitySmoothing`, `shakeMaxRawAcceleration`, `shakeRiseTime`, `shakeFallTime`, `shakeTeleportSpeed`, `grabGraceTime`. HumanConfig: `strengthGraceTime`. `WaterDrop`: `event Action<WaterDrop, FireSide> Hit` (null side if nothing was extinguished).
+- VFX: `EffectController` base with `Play()`/`Stop()` only; FireEffect, SmokeEffect, GroundFireEffect, WaterDropEffect, SplashEffect, StunStarsEffect. Optional serialized refs: FireSide `fireEffect`/`smokeEffect`, RoofSlab `roofFireEffect`/`roofSmokeEffect`, GroundFireZone `groundFireEffect`, WaterDrop `trailEffect`/`splashPrefab`, Human `stunStars`, Cup `tugSplashPrefab`.
+- Look: `Assets/Shaders/ToonOutline.shader` (toon lighting, UV-border wire, inverted-hull outline, no geometry shader) for the environment and heli materials in `Assets/Materials/`. Fire and water keep FillEffect.
+

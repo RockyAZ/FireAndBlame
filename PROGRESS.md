@@ -243,3 +243,49 @@ Gate: compile clean (0 errors, 0 warnings in project assemblies), Main.unity pla
 - Code: ControlsHintView (`legacyText` removed, `tmpText` only), WaterGauge, CupMotionIndicator, ResultPanel fields are `TMP_Text`. VisualsTests and GameRulesTests read TMP.
 - Scene: all 8 legacy Text components converted to TextMeshProUGUI (ControlsHint, Result Title/Score/Rescued/Deaths, Restart label, WaterGauge label, CupMotion label), LiberationSans SDF, fields reassigned. 0 legacy Text left in the scene and prefabs. Play start: 0 errors, 0 warnings.
 - Full suite: 43/45 PASS. All UI tests pass (controls_hint_matches_config, ui_result_panel_shows, ui_water_gauge_percent). Failing: `move_ignores_heli_yaw` ("heli barely moved 0.03 m") and `yaw_keys_z_x` ("Z gave Yaw 0", virtual keyboard not seen), both in HeliCameraMoveTests, unrelated to TMP and flaky in earlier full runs too. Not yet investigated.
+
+## Phase 7: DONE (2026-11-19), pending your by-eye Play mode check
+Heli crash fixed, calmer cup shake, toon look with outlines and windows, particle effects hooked into gameplay.
+
+Gate: compile clean (0 errors, 0 warnings in project assemblies, shaders compile clean). Full PlayMode run: **45/45 PASS** (the flaky `move_ignores_heli_yaw` and `yaw_keys_z_x` both passed). Three fix rounds were needed, all on one test (`strength_drains_from_real_shake`, see below).
+
+### Done
+- **Heli crash (root cause)**: the rotor colliders are children of the heli Rigidbody. Unity sends `OnCollisionEnter` for child colliders to the Rigidbody's GameObject only, so `RotorHazard.OnCollisionEnter` never fired. `HeliController.OnCollisionEnter` now checks each `contact.thisCollider` for a `RotorHazard` and forwards to `RotorHazard.ReportHit(contact.otherCollider)`. The heli body uses ContinuousDynamic collision detection.
+- **Crash result**: `Crash()` disables the rotor hazards, turns on gravity and breaks the heli apart: every MeshRenderer whose nearest Rigidbody is the heli (not the Cup hierarchy) is detached, gets a BoxCollider (layer Obstacle) and a dynamic Rigidbody that inherits the heli velocity plus a random impulse and spin. GameManager sets Lost, the ResultPanel shows, Restart reloads the level. Input stops. In test mode the break-apart is skipped.
+- **Cup shake rewritten**: velocity from the bowl Rigidbody (position delta when kinematic), low-pass, derivative, each sample clamped, low-pass again to give `Acceleration`. New `Cup.ShakeMagnitude` follows |Acceleration| with a slow rise and a faster fall. The measure re-baselines on teleports, test-mode switches and for `grabGraceTime` after any attach or detach (`Cup.ResetShake()`). A newly grabbed human has `strengthGraceTime` with no drain. Strength drain and the shake meter (`CupMotionIndicator`) both use `ShakeMagnitude`.
+- **Toon look**: `Assets/Shaders/ToonOutline.shader` (hand-written URP HLSL, no geometry shader): banded main-light lighting with shadows, SH ambient, rim; a faint wireframe from the distance to the UV border (`fwidth`, constant pixel width, good on boxes); an inverted-hull outline pass (`SRPDefaultUnlit`, pushed along the pivot direction by default so hard-edged cubes stay closed). Materials in `Assets/Materials/`: M_Building, M_Window, M_Roof, M_Ground, M_Heli_Body, M_Heli_Rotor, M_Pool (M_Cup and M_Obstacle exist but nothing uses them yet).
+- **Windows**: `Building_Side.prefab` child `Windows`, 15 cubes (5 floors x 3), 0.03 m out from the wall, no colliders, no shadows. FireOverlay stays in front at 0.05 m.
+- **Effects** (`Assets/Prefabs/VFX/`, controllers in `Assets/Scripts/VFX/`, base `EffectController`, API only Play()/Stop()): Fire, Smoke, GroundFire, WaterDrop (trail), Splash (one-shot, destroyWhenDone), StunStars. Particle shader `Assets/Shaders/FXParticle.shader`, materials M_FX_Fire/Smoke/Water/Star. The menu `Tools/VFX/Build Effect Prefabs` (Assets/Editor/VfxPrefabBuilder.cs) rebuilds them **and overwrites hand edits**.
+- **Hooks**: FireSide `fireEffect`/`smokeEffect` follow IsBurning (they stop during the extinguish pause and keep burning when the side is lost). RoofSlab `roofFireEffect`/`roofSmokeEffect` follow OnFire. GroundFireZone `groundFireEffect` plays from Initialize. WaterDrop: trail on Launch; on a hit, a splash at the closest point, the new `event Action<WaterDrop, FireSide> Hit`, then destroy. Human `stunStars` play while stunned. Cup `tugSplashPrefab` plays when water is dumped.
+- **Scene/prefabs**: Fire and Smoke in Building_Side and under RoofSlab/RoofFire (scale 0.5), one GroundFire emitter per GroundFireZone, Trail in WaterDrop.prefab, StunStars on HumanPrefab at y 2.3, Cup.tugSplashPrefab and WaterDrop.splashPrefab set to Splash.prefab.
+
+### Test fix rounds (`strength_drains_from_real_shake`)
+1. The human was grabbed on the roof and dragged 25 m by the joint. The test now places it at the hang slot first.
+2. After one fixed step the trigger had already grabbed it, so `TryGrab` rejected it. The test now grabs in the same frame.
+3. The heli sagged to y≈9, so the hanging human's feet were inside GroundFire_West (the whole ground is fire up to y=1) and it died. The test now climbs to y=16 at x=-35 before shaking. With the calmer measure the old threshold of 5 was barely reachable in real flight, so `HumanConfig.accelerationThreshold` is now **3.5**. Result: `maxCupAcc=7.62, minStrength=0.349`, still attached after 12 s, PASS.
+
+### Open issues
+- **Phase 4 water ball is still not implemented**: WaterDrop is still the trigger drop on layer Water (4). Layer 16 WaterBall is missing from TagManager and ProjectBootstrap. The fix belongs in `Assets/Editor/ProjectBootstrap.cs` and Cup/WaterDrop.
+- No tests yet for the real rotor collision path, the break-apart or the grab grace (all of these run outside test mode).
+- Only rotor hits crash the heli. The body can touch walls without crashing.
+- The cup is not released on a crash. It falls with the heli on its joint chain.
+- GroundFire has one emitter at the centre of each zone. The large North/South/Slab zones (scale 32 to 67) may look sparse at the corners or have huge particles.
+- The scripted shake test reached 7.6 m/s² with 0.8 s reversals, more than the estimate. Check in real play that normal flying stays green.
+- Unchanged from before: the stray root `/GameObject` in Main.unity, the 2 audio listeners warning, and pool humans still counting toward the score on a crash.
+- The unity CLI here rejects `--caller`/`--skill`, but the agent files still tell agents to pass them.
+
+### Check by eye (Play mode)
+- Fly the main or tail rotor into a wall: the heli breaks into parts that fall to the ground, the Lost panel appears, Restart reloads.
+- Fly normally with a human hanging: the shake bar stays green. Sharp full-speed reversals turn it red and the strength bar drains over 10 to 20 s, not instantly. A fresh grab never drops the human at once.
+- Toon look: banded shading, thin dark outlines, a faint edge wire on the boxes, windows on all four walls.
+- Burning walls and roofs show flames and smoke that stop when doused. Ground fire burns. The water drop leaves a trail and splashes. A stunned human shows stars. Dumping water shows a splash at the tank.
+
+### Tuning guide
+Gameplay numbers live in the ScriptableObjects in `Assets/Settings/` (asset values win over code defaults):
+- **HeliConfig.asset**: flight (speed, maxAcceleration, input rise/fall), auto-align (`autoAlignToCamera`, `alignMaxYawRate`, `alignGain`, `alignSmoothTime`), camera (`camera*`), crash debris (`breakImpulse`, `breakSpin`, `breakPartMass`, `debrisLifetime`, where 0 keeps the debris forever).
+- **CupConfig.asset**: tank fill and empty, joint chain, `maxHumans`, `regrabCooldown`, the shake measure (`shakeVelocitySmoothing`, `accelerationSmoothing`, `shakeMaxRawAcceleration`, `shakeRiseTime`, `shakeFallTime`, `shakeTeleportSpeed`, `grabGraceTime`), `fillVisualSmoothTime`.
+- **HumanConfig.asset**: how hard humans hold on (`accelerationThreshold` 3.5, `strengthLossFactor`, `strengthRecoveryPerSecond`, `maxStrength`, `strengthGraceTime`), stun (`bumpImpulse`, `stunDuration`), pool float and drift, the hang joint, animator trigger names.
+- **FireConfig.asset**: burn speed, `extinguishMinWater01`, `maxStopFireTime`, `roofIgniteTime`, `roofFireHeight`, ground fire.
+- **BuildingConfig.asset**: floors and floor height.
+- **GameRulesConfig.asset**: score per rescue, death and side, and the end conditions. **UIConfig.asset**: controls hint text and layout.
+- Look (not gameplay): per-material properties on `Assets/Materials/M_*.mat` (`_RampSteps`, `_ShadowColor`, `_WireStrength`, `_WireWidth`, `_OutlineWidth`, `_OutlineColor`). Particle rates, sizes and colours are on the particle systems in `Assets/Prefabs/VFX/*.prefab`. Effect placement is in Building_Side, RoofSlab, HumanPrefab and the GroundFire zones.

@@ -351,23 +351,53 @@ namespace FlameAndBlame.Tests.PlayMode
             yield return Load();
             string fail = null;
             var h = _humans.Humans[0];
-            if (_cup.TryGrab(h) != GrabResult.Grabbed) fail = "attach failed";
+            // The human spawns on a roof far from the heli (start -25,10,0). Bring it to the hang slot first, otherwise the joint
+            // snaps it across the map through ground fire zones / burning roofs and it dies (Dead = detached, not falling).
+            // Grab in the same frame: after a fixed step the grab-zone trigger may already have attached it
+            // (TryGrab then returns Rejected) or the unsupported human may have started falling.
+            Place(h, HangSlots(_cup)[0].position);
+            var grab = _cup.TryGrab(h);
+            if (grab != GrabResult.Grabbed && h.AttachedCup != _cup) fail = $"attach failed ({grab}, state {h.State}, falling {h.IsFalling})";
             if (fail == null)
             {
                 _heli.SetControlSource(_tm.Scripted);
-                float t = 0f, minStr = 1f, maxAcc = 0f;
-                while (t < 12f && h.IsAttached)
+                // Fly in clear air: the hanging human dangles ~7 m below the heli and ground fire zones kill up to y=1,
+                // so climb to flyY and move to x=-35 (west of the building, nothing there) before shaking.
+                const float flyY = 16f, centerX = -35f;
+                float t = 0f, minStr = 1f, maxAcc = 0f, climbT = 0f;
+                while (climbT < 8f && (_heli.Body.position.y < flyY - 0.5f || _heli.Body.position.x > centerX + 1f) && h.IsAttached && !_heli.IsCrashed)
                 {
-                    float phase = Mathf.Floor(t / 0.4f);
-                    _tm.Scripted.Set(new HeliCommand { MoveWorld = new Vector3((phase % 2f == 0f) ? 1f : -1f, 0f, 0f) });
-                    t += Time.deltaTime;
-                    minStr = Mathf.Min(minStr, h.Strength01);
-                    maxAcc = Mathf.Max(maxAcc, _cup.Acceleration.magnitude);
+                    float vx = _heli.Body.position.x > centerX ? -1f : 0f;
+                    _tm.Scripted.Set(new HeliCommand { MoveWorld = new Vector3(vx, 0f, 0f), Vertical = _heli.Body.position.y < flyY ? 1f : 0f });
+                    climbT += Time.deltaTime;
                     yield return null;
                 }
                 _tm.Scripted.Set(default);
-                Debug.Log($"[TEST-INFO] {n} t={t:F1}s minStrength={minStr:F3} maxCupAcc={maxAcc:F2} threshold={_hc.accelerationThreshold} attached={h.IsAttached} falling={h.IsFalling}");
-                if (minStr >= 0.999f && h.IsAttached) fail = $"strength never dropped (max Cup.Acceleration {maxAcc:F2} vs threshold {_hc.accelerationThreshold})";
+                for (float s = 0f; s < 3f; s += Time.deltaTime) yield return null;   // let the heli and the chain settle
+                bool killed = h.State == HumanState.Dead;
+                while (!killed && t < 12f && h.IsAttached && !_heli.IsCrashed)
+                {
+                    float phase = Mathf.Floor(t / 0.8f);
+                    float dir = (phase % 2f == 0f) ? 1f : -1f;
+                    float dx = _heli.Body.position.x - centerX;
+                    if (Mathf.Abs(dx) > 8f) dir = -Mathf.Sign(dx);   // stay within 8 m of the shake center
+                    float vy = Mathf.Clamp(flyY - _heli.Body.position.y, -1f, 1f);
+                    _tm.Scripted.Set(new HeliCommand { MoveWorld = new Vector3(dir, 0f, 0f), Vertical = vy });
+                    t += Time.deltaTime;
+                    minStr = Mathf.Min(minStr, h.Strength01);
+                    maxAcc = Mathf.Max(maxAcc, _cup.ShakeMagnitude);
+                    killed = h.State == HumanState.Dead;
+                    yield return null;
+                }
+                _tm.Scripted.Set(default);
+                if (killed) fail = $"human killed by a kill volume while flying in clear air (heliPos {_heli.Body.position}, human {h.transform.position})";
+                Debug.Log($"[TEST-INFO] {n} t={t:F1}s minStrength={minStr:F3} maxCupAcc={maxAcc:F2} threshold={_hc.accelerationThreshold} attached={h.IsAttached} falling={h.IsFalling} state={h.State} crashed={_heli.IsCrashed} heliPos={_heli.Body.position}");
+                // Calm shake measure: strength only has to drop if the smoothed shake really crossed the threshold.
+                if (fail != null) { }
+                else if (_heli.IsCrashed) fail = "heli crashed during the scripted shake";
+                else if (!h.IsAttached && minStr >= 0.999f) fail = $"human left the cup without losing strength (state {h.State}, falling {h.IsFalling})";
+                else if (maxAcc < 0.5f * _hc.accelerationThreshold) fail = $"shake not measured (max ShakeMagnitude {maxAcc:F2}, threshold {_hc.accelerationThreshold})";
+                else if (maxAcc > _hc.accelerationThreshold + 0.5f && minStr >= 0.999f && h.IsAttached) fail = $"strength never dropped (max ShakeMagnitude {maxAcc:F2} vs threshold {_hc.accelerationThreshold})";
             }
             Report(n, fail == null, fail);
         }

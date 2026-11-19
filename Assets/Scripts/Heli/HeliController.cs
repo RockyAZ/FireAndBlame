@@ -38,6 +38,7 @@ namespace FlameAndBlame.Heli
 			b.linearDamping = _config.linearDrag;
 			b.angularDamping = _config.angularDrag;
 			b.interpolation = RigidbodyInterpolation.Interpolate;
+			b.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
 			_noiseSeed = UnityEngine.Random.value * 1000f;
 			_ready = true;
 		}
@@ -49,12 +50,49 @@ namespace FlameAndBlame.Heli
 			if (IsCrashed) return;
 			IsCrashed = true;
 			_move = Vector3.zero; _vertical = 0f; _yawInput = 0f;
+			foreach (var r in GetComponentsInChildren<RotorHazard>(true)) r.enabled = false;
 			if (!Body.isKinematic)
 			{
 				Body.useGravity = true;
 				Body.linearDamping = 0f;
+				BreakApart();
 			}
 			Crashed?.Invoke();
+		}
+
+		// Collision callbacks of child colliders are delivered to the Rigidbody object, so forward them here.
+		private void OnCollisionEnter(Collision c)
+		{
+			foreach (var contact in c.contacts)
+			{
+				var hazard = contact.thisCollider.GetComponent<RotorHazard>();
+				if (hazard != null) { hazard.ReportHit(contact.otherCollider); if (IsCrashed) return; }
+			}
+		}
+
+		private void BreakApart()
+		{
+			int layer = LayerMask.NameToLayer("Obstacle");
+			Vector3 v = Body.linearVelocity, w = Body.angularVelocity;
+			var parts = new System.Collections.Generic.List<Transform>();
+			foreach (var r in GetComponentsInChildren<MeshRenderer>())
+				// The cup (own Rigidbody) and anything under it stays out of the debris.
+				if (r.GetComponentInParent<Rigidbody>() == Body) parts.Add(r.transform);
+			foreach (var t in parts)
+			{
+				t.SetParent(null, true);
+				foreach (var old in t.GetComponents<Collider>()) Destroy(old);
+				var box = t.gameObject.AddComponent<BoxCollider>();
+				var mf = t.GetComponent<MeshFilter>();
+				if (mf != null && mf.sharedMesh != null) { box.center = mf.sharedMesh.bounds.center; box.size = mf.sharedMesh.bounds.size; }
+				if (layer >= 0) t.gameObject.layer = layer;
+				var rb = t.gameObject.AddComponent<Rigidbody>();
+				rb.mass = _config.breakPartMass;
+				rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+				rb.linearVelocity = v + UnityEngine.Random.onUnitSphere * _config.breakImpulse;
+				rb.angularVelocity = w + UnityEngine.Random.onUnitSphere * (_config.breakSpin * Mathf.Deg2Rad);
+				if (_config.debrisLifetime > 0f) Destroy(t.gameObject, _config.debrisLifetime);
+			}
 		}
 
 		public void EnterTestMode()
@@ -129,7 +167,7 @@ namespace FlameAndBlame.Heli
 
 		private void Update()
 		{
-			if (!_ready || visual == null) return;
+			if (!_ready || visual == null || IsCrashed) return;
 			Vector3 local = Quaternion.Inverse(Quaternion.Euler(0f, Body.rotation.eulerAngles.y, 0f)) * _acceleration;
 			float k = _config.tiltVisualMaxDeg / Mathf.Max(_config.maxAcceleration, Mathf.Epsilon);
 			Quaternion tilt = Quaternion.Euler(local.z * k, 0f, -local.x * k);
