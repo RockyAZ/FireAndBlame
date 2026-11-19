@@ -357,3 +357,12 @@ Gate: compile clean, shaders clean. Full PlayMode run: **56/56 PASS** (53 earlie
 - **SecondRotorCollider** (user-added, `Game/Actors/Heli/MainRotor/SecondRotorCollider`, BoxCollider, not a trigger): set to layer Rotors, tag Rotor. `HeliController.OnCollisionEnter` now finds the hazard with `GetComponentInParent<RotorHazard>()`, so any collider on or under a rotor crashes the heli through that rotor's RotorHazard.
 - **Chain view**: pivots now sit on each joint's own (lower body) anchor and links run pivot to pivot, so `Joint_2` stays exactly on `Bowl/ChainAttachPoint` even when the joint stretches in flight (it drifted up to ~9 cm before).
 - Tests: new `CrashFixTests.cs` (`debris_lands_on_ground`, `second_rotor_collider_crashes`); `p8_rotor_blur_while_flying` now compares rotor transforms against their values at load (the rotors were re-tuned by hand) and allows child colliders under a rotor. Full suite **59/59 PASS**.
+
+## Follow-up (user request, 2026-11-19): cursor lock and pause menu
+- `FlameAndBlame.Core.GamePause` (static): `IsPaused`, `InputBlocked`, `SetPaused` (timeScale 0/1), `Reset`, `ApplyCursor`. Lets the Heli input react to UI menus without a UI reference.
+- `FlameAndBlame.UI.PauseMenu` at `Game/UI/Canvas/PauseMenu` (PausePanel overlay, "Pause" title, Replay button; styled like the ResultPanel), bound by `HudController.pauseMenu`. Esc toggles it while playing (Esc again resumes). Replay reloads the level. After Won/Lost it cannot open. UI asmdef now references `Unity.InputSystem` (Esc key).
+- Cursor: hidden and locked during play; visible and free on the pause menu and the end screen. While a menu is open `PlayerControlSource` returns no movement, look or zoom, so the camera does not swing while you click and F cannot drop water on resume.
+- `ResultPanel.Restart` and `PauseMenu.Replay` reset the pause state and reload by build index (by path if the scene has none).
+- Tests: `PauseMenuTests.cs` (4). Full suite **63/63 PASS** (before the reload-by-path tweak, which was only recompiled).
+- Fix: closing the menu with Esc left the cursor visible, because the Editor frees the cursor on Esc after scripts ran. `PauseMenu.LateUpdate` now re-applies hidden + locked every frame while playing. Pause tests 4/4 PASS.
+- Check by eye: Esc opens the menu with the cursor shown; Esc again hides and locks it. If the Editor still keeps it free, one click in the Game view locks it (Editor-only rule; builds do not need it).

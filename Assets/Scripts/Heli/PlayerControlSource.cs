@@ -12,8 +12,9 @@ namespace FlameAndBlame.Heli
 		private InputAction _move, _vertical, _yaw, _tug, _look, _zoom;
 		private bool _warned;
 
-		public Vector2 Look => _look.ReadValue<Vector2>();
-		public float Zoom => _zoom.ReadValue<float>();
+		// While a menu (pause or end screen) owns the mouse, the player drives nothing.
+		public Vector2 Look => GamePause.InputBlocked ? Vector2.zero : _look.ReadValue<Vector2>();
+		public float Zoom => GamePause.InputBlocked ? 0f : _zoom.ReadValue<float>();
 
 		private void Awake()
 		{
@@ -42,6 +43,7 @@ namespace FlameAndBlame.Heli
 
 		public HeliCommand Read()
 		{
+			if (GamePause.InputBlocked) return default;
 			Vector2 move = _move.ReadValue<Vector2>();
 			Vector3 forward = Vector3.forward, right = Vector3.right;
 			if (cameraTransform != null)

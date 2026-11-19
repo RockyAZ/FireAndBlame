@@ -16,6 +16,8 @@ namespace FlameAndBlame.UI
 		[SerializeField] private WaterGauge waterGauge;
 		[SerializeField] private CupMotionIndicator motionIndicator;
 		[SerializeField] private ResultPanel resultPanel;
+		[Tooltip("Optional. Esc pause menu; also owns the cursor (locked in play, free on menus).")]
+		[SerializeField] private PauseMenu pauseMenu;
 
 		public void Initialize()
 		{
@@ -26,6 +28,8 @@ namespace FlameAndBlame.UI
 			// Humans are spawned at runtime, so each carries its own bar (child of the prefab).
 			foreach (var h in _humans.Humans)
 				if (h != null) h.GetComponentInChildren<HumanStrengthBar>(true)?.Bind(h);
+			if (pauseMenu != null) pauseMenu.Bind(_game);
+			else Debug.LogWarning("HudController: pauseMenu not assigned.", this);
 			if (resultPanel != null) _game.ResultChanged += OnResult;
 			else Debug.LogWarning("HudController: resultPanel not assigned.", this);
 		}

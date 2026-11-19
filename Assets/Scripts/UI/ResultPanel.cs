@@ -33,6 +33,13 @@ namespace FlameAndBlame.UI
 			if (deathsText != null) deathsText.text = "Deaths: " + deaths;
 		}
 
-		public void Restart() => SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+		public void Restart()
+		{
+			GamePause.Reset();
+			var scene = SceneManager.GetActiveScene();
+			// buildIndex is -1 when the scene was loaded by path (e.g. from tests), so fall back to the path.
+			if (scene.buildIndex >= 0) SceneManager.LoadScene(scene.buildIndex);
+			else SceneManager.LoadScene(scene.path);
+		}
 	}
 }
