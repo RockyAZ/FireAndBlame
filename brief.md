@@ -50,13 +50,19 @@ All gameplay variables live in ScriptableObjects. Interactions use physics: coll
 - Water dropped on a side or on its slab puts out both the side and the slab.
 - Each slab has a box area on top where humans spawn at the start of the game.
 
+## Decisions (Phase 5 humans)
+- The user made the human animator (triggers Stunned, Hanging, ChillPool, WaitRescue, Dead) and the HumanPrefab. Humans are created at runtime with Instantiate; the prefab instance in the scene is only a preview and is disabled at start.
+- Hanging and floating are adjustable by hand: the human prefab has a TankAttachPoint (where it holds the tank) and a FloatPoint (its water line). The tank has hang slots and a swim slot. The pool has a water surface marker and a drift area.
+- Rescued humans in the pool float on the surface and drift around slowly, so the player has to dodge them when refilling.
+- A human scooped into the tank swims inside it (state 4) and uses the ChillPool animation for now.
+
 ## Architecture
 Module-based systems, each folder with its own text-written asmdef (references by name), wired by dependency injection from a single `MainEntry` GameObject. Full rules, module table and contract are in CLAUDE.md.
 
 ## Default numbers (all live in ScriptableObjects; the user tunes them later)
 HeliConfig: maxHorizontalSpeed 12, maxVerticalSpeed 6, inputRiseTime 0.6, inputFallTime 0.9, velocityResponse 1.5, maxAcceleration 6, maxYawRate 60 deg/s, yawDriftTorque 0.6, driftNoiseFrequency 0.25, levelingStrength 2, tiltVisualMaxDeg 12, linearDrag 0.3, angularDrag 1.5, rigidbodyMass 10.
 CupConfig: capacity 100, fillRatePerSecond 25, emptyThreshold 0.05, fullThreshold 0.95, maxHumans 2, segmentCount 3, segmentLength 2, jointAngularLimitDeg 40, jointSpring 50, jointDamper 8, grabZoneRadius 1.2, dumpDropRadius 1.5, bumpImpulse 4.
-HumanConfig: maxStrength 100, accelerationThreshold 4, strengthLossFactor 6, strengthRecoveryPerSecond 3, stunDuration 2.5, animatorTriggers per state (WaitingOnRoof, RescuedHanging, ChillingInPool, SwimmingInTank, Dead), humanCount 4.
+HumanConfig: maxStrength 100, accelerationThreshold 4, strengthLossFactor 6, strengthRecoveryPerSecond 3, stunDuration 2.5, animatorTriggers per state (WaitingOnRoof, RescuedHanging, ChillingInPool, SwimmingInTank, Dead), humanCount 4, mass 60, hangJointLinearLimit 0.3, hangJointSpring 200, hangJointDamper 20, hangJointAngularLimitDeg 60, floatHeight 0.0, bobAmplitude 0.1, bobFrequency 0.5, driftSpeed 0.8, driftRetargetTime 4, driftSeparation 1.2, standUpSpeed 4.
 FireConfig: spreadSecondsPerFloor 12, maxStopFireTime 20, extinguishMinWater01 0.9, groundFirePermanent true, lostSpreadSecondsPerFloor 3.
 BuildingConfig: floors 5, floorHeight 3.5, footprint 12 x 12, roofHumanSpawnMargin 1.5.
 PoolConfig (inside GameRulesConfig): poolSize 10 x 2.5 x 6, distanceFromBuilding 14.

@@ -23,6 +23,13 @@ namespace FlameAndBlame.Rescue
 		[Tooltip("FillEffectView on the bowl renderer (M_Water), optional.")]
 		[SerializeField] private FillEffectView waterView;
 
+		[Tooltip("HangSlot_1, HangSlot_2: children of the bowl on the rim. One hanging human each.")]
+		[SerializeField] private Transform[] hangSlots;
+		[Tooltip("SwimSlot: child of the bowl inside near the top. One swimming human.")]
+		[SerializeField] private Transform swimSlot;
+
+		private readonly Dictionary<Human, Transform> _slots = new Dictionary<Human, Transform>();
+		private bool _grabLocked;
 		private readonly List<Rigidbody> _segments = new List<Rigidbody>();
 		private readonly List<ConfigurableJoint> _joints = new List<ConfigurableJoint>();
 		private readonly List<bool> _savedKinematic = new List<bool>();
@@ -37,7 +44,7 @@ namespace FlameAndBlame.Rescue
 		public float Water01 { get; private set; }
 		public bool IsEmpty => _config != null && Water01 <= _config.emptyThreshold;
 		public bool IsFull => _config != null && Water01 >= _config.fullThreshold;
-		public int AttachedCount { get; private set; }
+		public int AttachedCount => _slots.Count;
 		public Vector3 Acceleration { get; private set; }
 		public bool InPool { get; private set; }
 		public bool IsTestMode => _testMode;
@@ -101,7 +108,78 @@ namespace FlameAndBlame.Rescue
 			SetWater(Water01 + _config.fillRatePerSecond / _config.capacity * dt);
 		}
 
-		public GrabResult TryGrab(Human h) => GrabResult.Rejected; // TODO Phase 3
+		/// <summary>Called by CupGrabTrigger for anything tagged Human in the grab zone or touching the bowl.</summary>
+		public void ReportGrabContact(Collider other)
+		{
+			if (other == null || !other.CompareTag("Human")) return;
+			var h = other.GetComponentInParent<Human>();
+			if (h != null) TryGrab(h);
+		}
+
+		/// <summary>Rules in GAME_DESIGN.md section 1 (Cup). First match wins.</summary>
+		public GrabResult TryGrab(Human h)
+		{
+			if (h == null || _config == null) return GrabResult.Rejected;
+			if (h.State == HumanState.Dead || h.IsAttached || h.IsFalling || h.IsStunned
+				|| AttachedCount >= _config.maxHumans || _grabLocked) return GrabResult.Rejected;
+			bool onRoof = h.State == HumanState.WaitingOnRoof, inPoolHuman = h.State == HumanState.ChillingInPool;
+			if (InPool && inPoolHuman && FreeSlot(true) != null) return Attach(h);
+			if (!IsEmpty && (onRoof || inPoolHuman))
+			{
+				Bump(h);
+				return GrabResult.BouncedFull;
+			}
+			if (IsEmpty && onRoof && FreeSlot(false) != null) return Attach(h);
+			return GrabResult.Rejected;
+		}
+
+		private GrabResult Attach(Human h)
+		{
+			h.AttachTo(this);
+			return h.AttachedCup == this ? GrabResult.Grabbed : GrabResult.Rejected;
+		}
+
+		private void Bump(Human h)
+		{
+			Vector3 away = h.Body.worldCenterOfMass - bowlBody.worldCenterOfMass;
+			away.y = 0f;
+			Vector3 impulse = (away.normalized + Vector3.up * _config.bumpUpBias) * _config.bumpImpulse;
+			// VelocityChange: the bump speed does not depend on the human's mass (60 kg would swallow a plain 4 N s impulse).
+			if (!h.Body.isKinematic) h.Body.AddForce(impulse, ForceMode.VelocityChange);
+			h.Stun();
+		}
+
+		// ---------- slots (one human per slot, hanging and swimming together count against maxHumans) ----------
+
+		private bool IsUsed(Transform slot)
+		{
+			foreach (var kv in _slots) if (kv.Value == slot) return true;
+			return false;
+		}
+
+		private Transform FreeSlot(bool swim)
+		{
+			if (swim)
+			{
+				if (swimSlot != null && !IsUsed(swimSlot)) return swimSlot;
+			}
+			else if (hangSlots != null)
+				foreach (var s in hangSlots) if (s != null && !IsUsed(s)) return s;
+			// Test mode fallback when the slot children are missing.
+			return _testMode && humanAnchor != null && !IsUsed(humanAnchor) ? humanAnchor : null;
+		}
+
+		internal Transform ClaimSlot(Human h, bool swim)
+		{
+			if (_config == null || AttachedCount >= _config.maxHumans) return null;
+			Transform slot = FreeSlot(swim);
+			if (slot != null) _slots[h] = slot;
+			return slot;
+		}
+
+		internal void NotifyDetached(Human h) => _slots.Remove(h);
+
+		private void Unlock() => _grabLocked = false;
 
 		/// <summary>Launches a WaterDrop with the current water and empties the cup, then releases humans.</summary>
 		public void Tug()
@@ -120,7 +198,23 @@ namespace FlameAndBlame.Rescue
 			}
 			ReleaseAll();
 		}
-		public void ReleaseAll() { }
+		/// <summary>Every attached human detaches, falls with the bowl's velocity, and the grab lock starts.</summary>
+		public void ReleaseAll()
+		{
+			Vector3 v = bowlBody.isKinematic ? _lastVelocity : bowlBody.linearVelocity;
+			var list = new List<Human>(_slots.Keys);
+			foreach (var h in list)
+			{
+				h.Detach();
+				if (h.Body.isKinematic) continue;
+				h.Body.linearVelocity = v;
+				h.Body.angularVelocity = bowlBody.angularVelocity;
+			}
+			if (list.Count == 0 || _config == null) return;
+			_grabLocked = true;
+			CancelInvoke(nameof(Unlock));
+			Invoke(nameof(Unlock), _config.regrabCooldown);
+		}
 
 		public void EnterTestMode()
 		{

@@ -17,7 +17,7 @@ namespace FlameAndBlame.Rescue
 		[Tooltip("Joint damper.")] public float jointDamper = 8f;
 		[Tooltip("Grab zone radius [m].")] public float grabZoneRadius = 1.2f;
 		[Tooltip("Dumped water drop radius [m].")] public float dumpDropRadius = 1.5f;
-		[Tooltip("Bump impulse on a human hit by a full cup [N s].")] public float bumpImpulse = 4f;
+		[Tooltip("Bump speed given to a human hit by a full cup, mass independent (VelocityChange) [m/s].")] public float bumpImpulse = 4f;
 		[Tooltip("Upward bias of the bump [0..1].")] public float bumpUpBias = 0.5f;
 		[Tooltip("Grab lock after a Tug [s].")] public float regrabCooldown = 1f;
 		[Tooltip("Distance between human slots [m].")] public float humanSlotSpacing = 0.8f;

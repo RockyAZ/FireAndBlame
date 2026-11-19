@@ -136,4 +136,69 @@ Gate: compile clean (0 errors, 0 warnings in project assemblies), all 26 PlayMod
 - Test-runner temp scene `Assets/InitTestScene<guid>.unity` may be left in Assets (untracked); safe to delete.
 - Phase 5: "released human lands on slab -> WaitingOnRoof" is checked on the Human side (tag Roof), since Fire cannot reference Rescue.
 
-## Phase 5: NEXT (humans)
+## Phase 5: DONE (2026-11-19), pending your by-eye Play mode check
+Humans: spawning, hanging, bump and stun, swimming in the tank, pool floating and drifting, falling and landing, strength, animator triggers.
+
+Gate: compile clean (0 errors, 0 warnings in project assemblies). Last full run: 35/36 PlayMode tests PASS. All 10 new HumanTests pass (test mode OFF, real physics). The one failure, `yaw_keys_z_x` (Phase 4), only fails in the full run and passes when HeliCameraMoveTests runs alone (3/3). It passed in the previous full run, so it looks order-dependent and flaky (the virtual keyboard is not always seen). It is not a Phase 5 regression. Three fix rounds were needed.
+
+### Done
+- **Design**: GAME_DESIGN.md section 11 "Humans (Phase 5)" (physics mode per state, attach points, TryGrab, release and landing, strength, pool float and drift, trigger mapping, spawning); sections 1, 3, 6, 7 and 8 updated. TASKS.md P5-1..P5-11. CLAUDE.md unchanged.
+- **Code (Rescue)**:
+  - `HumanConfig`: rewritten with the brief.md defaults (mass 60, hang joint angular 60 / spring 200 / damper 20, floatHeight 0, bob 0.1 @ 0.5 Hz, drift 0.8 m/s, retarget 4 s, separation 1.2). Extra fields: `driftArriveDistance`, `driftTurnRate`, `deadSettleTime`, and the seven trigger names.
+  - `Human`: rewritten. Physics mode is switched only from SetState/Detach. The hang ConfigurableJoint has linear motion **Locked** and angular motion Limited. Strength ticks in Human.FixedUpdate from `Cup.Acceleration`. Landing goes through `ReportCollision` (RoofSlab parent chain).
+  - `HumanAnimator`: StringToHash, `PlayStun`, `LastTrigger`, `TriggerFired`.
+  - `HumansSystem`: spawns from the prefab asset, round robin over the RoofSlabs.
+  - `Cup`: `hangSlots`, `swimSlot`, TryGrab rules, Bump, ReleaseAll.
+  - `PoolZone`: `SurfaceY`, `DriftBounds`.
+  - `CupGrabTrigger` is new; it forwards from GrabZone.
+- **Prefab** `HumanPrefab` (your hierarchy kept, only additions):
+  - Root: Human, HumanAnimator, Rigidbody 60 kg (interpolate), CapsuleCollider r 0.25 / h 2.1 / center y 1.05.
+  - Layer and tag Human on all 17 objects. Hips BoxCollider disabled. No child Rigidbodies.
+  - `TankAttachPoint` at local (0, 2.3, 0), `FloatPoint` at (0, 1.4, 0).
+- **Scene**:
+  - Bowl: `HangSlot_1` (0.5, 0.5, 0), `HangSlot_2` (-0.5, 0.5, 0), `SwimSlot` (0, 0.3, 0) (bowl-local); CupGrabTrigger on GrabZone.
+  - Pool: `WaterSurface` (world y 2.8), `DriftArea` (25, 2.5, 0) with scale (7.8, 0.5, 3.8).
+  - HumansSystem added to Game/Systems (humanPrefab, scenePreview, humansRoot = Game/Actors/Humans) and MainEntry.humans assigned. All new fields read back non-null.
+  - HumanConfig.asset set to the brief.md values.
+- **Tests** `Assets/Tests/PlayMode/HumanTests.cs` (all PASS):
+  - humans_spawn_on_slabs
+  - empty_tank_grabs_to_hang_slot: attach point 0.02 to 0.035 m from its slot; a 3rd human is Rejected.
+  - full_tank_bounces_and_stuns: pushed 1.54 m; Stunned then WaitRescue.
+  - pool_tank_scoops_swimmer
+  - tug_releases_velocity_and_lands: inherits (3,0,0); lands pool → ChillingInPool, slab → WaitingOnRoof, ground fire → Dead.
+  - strength_drains_and_recovers: direct TickStrength, because Cup.Acceleration is read-only.
+  - strength_drains_from_real_shake: Acceleration peaked at 10.5; the human let go after 2.5 s.
+  - pool_human_floats_and_drifts: max 0.10 m from the waterline, drifted 2.4 to 3.2 m, stayed inside DriftArea.
+  - burning_slab_kills_human
+  - animator_triggers_match_state
+
+### Fix rounds
+1. Compile CS1061: `ConfigurableJoint.enabled` does not exist. DestroyJoint now frees every axis before the deferred Destroy.
+2. Your request: the hang joint linear x/y/z motion is now Locked, so humans don't fly away from the cup. `hangJointLinearLimit` is unused while the joint is locked. The design step had invented HumanConfig defaults; they were reset to brief.md, including the asset.
+3. full_tank_bounces_and_stuns: `bumpImpulse` 4 as an impulse moved a 60 kg human about 0.07 m/s (absorbed by friction). Cup.Bump now uses `ForceMode.VelocityChange`, so bumpImpulse is a speed in m/s (brief value kept).
+
+### Open issues
+- **The Phase 4 water ball was never implemented.** CLAUDE.md says it is done, but `Cup.Tug` still spawns the old trigger `WaterDrop` (`Launch(amount, velocity)`, `dumpDropRadius`). There are no `waterBall*` CupConfig fields, and layer 16 WaterBall is missing from TagManager. Not touched in Phase 5.
+- `yaw_keys_z_x` is flaky in the full run (see Gate).
+- `standUpSpeed` from brief.md has no field yet (landing on a slab snaps the human upright).
+- HumanConfig.asset still has stale YAML keys (triggerWaitingOnRoof.., poolDrag, detachDownSpeed). Unity ignores them.
+- Contract candidates not yet in CLAUDE.md: `Human.ReportCollision/EnterPool/IsFalling/IsAttached/AttachedCup/TankAttachPoint/FloatPoint`, `HumanAnimator.LastTrigger/TriggerFired/PlayStun/PlayFalling`, `Cup.ReportGrabContact`, `CupGrabTrigger`, `HumansSystem.humansRoot`, HumanConfig `driftArriveDistance/driftTurnRate/deadSettleTime`.
+- A human ChillingInPool is scooped into the tank at any water level when the bowl is in the pool and SwimSlot is free (follows the contract).
+- A falling human that touches ground with no GroundFireZone keeps falling. Not reachable while `groundFirePermanent` is true.
+- MainEntry.game and hud are still null (Phase 6).
+
+### Check by eye (Play mode)
+- Four humans stand upright on the slabs, play WaitRescue, and the grey preview human is gone.
+- Fly the empty tank into a human: it hangs by its raised hands from the rim, swings, and stays attached. Two at most.
+- Shake hard: a hanging human lets go and falls.
+- Fill the tank, touch a human: it jumps away and plays Stunned, then WaitRescue.
+- F over the pool: the humans fall in, float at the waterline with gentle bobbing, and drift without leaving the pool or overlapping.
+- Dip the tank into the pool next to a floater: it sits in the tank (ChillPool pose).
+- Let a roof burn: humans on it die (Dead animation) and stay where they fell.
+
+### Transforms to adjust (all plain Transforms, safe to move)
+- **Hanging height and offset**: `TankAttachPoint` in `Assets/Prefabs/HumanPrefab.prefab` (the point between the raised hands), and `HangSlot_1` / `HangSlot_2` under `Game/Actors/Heli/Cup/Bowl` (where the hands grip the rim). The human hangs so that TankAttachPoint sits exactly on its slot.
+- **Floating depth in the pool**: `FloatPoint` in HumanPrefab (the body point that sits on the waterline; raise it to sink the human deeper), `Pool/WaterSurface` (the water line itself; keep it at the visible water top), and `HumanConfig.floatHeight` for a numeric offset.
+- **Sitting in the tank**: `Bowl/SwimSlot` (FloatPoint is placed on it).
+- **Drift area**: the scale and position of `Pool/DriftArea`.
+- **Spawn area**: `HumanSpawnArea` in `Assets/Prefabs/RoofSlab.prefab`.

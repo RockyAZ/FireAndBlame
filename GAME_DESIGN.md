@@ -29,42 +29,43 @@ On MainRotor and TailRotor (layer Rotors, tag Rotor), non-trigger collider. `OnC
 - `FillTick(dt)`: Water01 += fillRatePerSecond / capacity * dt, clamp 1. Called by PoolZone each physics step while the bowl is inside. Works whether or not humans are attached.
 - `Acceleration`: bowl velocity derived from position delta each FixedUpdate (works kinematic and dynamic), differentiated and low-passed by `accelerationSmoothing`. Humans read it for strength.
 - `InPool` / `SetInPool(bool)`: set by PoolZone enter and exit of the bowl.
-- `TryGrab(Human h)` rules, first match wins:
-  1. h dead, already attached, `IsStunned`, `AttachedCount >= maxHumans`, or grab lock active (`regrabCooldown` after a Tug) -> Rejected.
-  2. h.State == ChillingInPool and `InPool` and not `IsFull` -> `h.AttachTo(this)` (becomes SwimmingInTank) -> Grabbed. (The accidental pool grab, also for an empty cup.)
-  3. `IsFull` -> push `h.Body` away from the bowl with impulse `bumpImpulse` (plus `bumpUpBias` upward), `h.Stun()` -> BouncedFull.
-  4. h.State == WaitingOnRoof and `IsEmpty` -> `h.AttachTo(this)` (becomes RescuedHanging) -> Grabbed.
-  5. otherwise (partial water, other states) -> Rejected.
+- Slots (Phase 5, section 11): serialized `Transform[] hangSlots` (HangSlot_1, HangSlot_2 on the rim) and `Transform swimSlot` (inside, near the top). A slot holds one human. `AttachedCount` counts hanging and swimming humans together and never exceeds `maxHumans` (2).
+- `TryGrab(Human h)` rules, first match wins (Phase 5, supersedes the earlier list):
+  1. h is Dead, already attached, `IsFalling`, `IsStunned`, `AttachedCount >= maxHumans`, or the grab lock is active (`regrabCooldown` after a Tug) -> Rejected.
+  2. `InPool` and h.State == ChillingInPool and `swimSlot` free -> `h.AttachTo(this)` (becomes SwimmingInTank at the SwimSlot) -> Grabbed. Whatever the water level: the accidental scoop.
+  3. `Water01 > emptyThreshold` (tank not empty) and h.State is WaitingOnRoof or ChillingInPool (the pool case that reaches here is: bowl outside the pool fill, or no swim slot free) -> push `h.Body` away from the bowl with impulse `bumpImpulse` (plus `bumpUpBias` upward), `h.Stun()` -> BouncedFull.
+  4. `IsEmpty` and h.State == WaitingOnRoof and a hang slot free -> `h.AttachTo(this)` (becomes RescuedHanging at that HangSlot) -> Grabbed.
+  5. otherwise -> Rejected.
 - GrabZone (trigger, tag CupGrabZone) `OnTriggerEnter/Stay` and the bowl `OnCollisionEnter` forward to TryGrab for any collider tagged Human.
 - `Tug()`: if not `IsEmpty`: instantiate `dropPrefab` at the bowl, scale to diameter `2*dumpDropRadius`, `Launch(Water01, Body.linearVelocity)`, `Destroy(drop, dropLifetime)`, Water01 = 0. Then `ReleaseAll()`. Tug with an empty cup only releases. Update reads `IControlSource.TugPressed` and calls Tug (skipped in test mode).
-- `ReleaseAll()`: every attached human `Detach()`, list cleared, grab lock for `regrabCooldown`. Humans keep their state while falling; the landing zone decides (section 3).
-- Human slots: attached humans are placed at `HumanAnchor` offset by `humanSlotSpacing` (slot 0 left, 1 right).
+- `ReleaseAll()`: every attached human `Detach()` and receives the bowl's `linearVelocity` (inherited momentum) and becomes Falling (`IsFalling`); slots freed, list cleared, grab lock for `regrabCooldown`. Humans keep their state while falling; the landing decides (section 3).
+- Slots replace the old `HumanAnchor` offset placement (`humanSlotSpacing` is unused now). `HumanAnchor` stays as the test-mode fallback parent if a slot is missing.
 
 ### WaterDrop (Rescue)
 A solid physical ball, already implemented (see section 10). Hit on a wall or on a RoofSlab extinguishes the matching FireSide.
 
 ### Human (Rescue)
-- Initialize(HumanConfig): Strength01 = 1, State = WaitingOnRoof (via SetState, no event noise at start), poolDrag stored.
-- `SetState(s)`: the only writer of State. No-op if same state or State == Dead. Applies state side effects (below), calls `HumanAnimator.Apply`, raises `StateChanged`.
-- `AttachTo(cup)`: requires unattached, not dead. Unparent-free in dynamic mode: ConfigurableJoint to `cup.Body`, anchored at the cup slot; `Physics.IgnoreCollision` between human and cup colliders while attached; Strength01 = 1; state becomes RescuedHanging (from WaitingOnRoof) or SwimmingInTank (from ChillingInPool). Test mode: parent to `cup.HumanAnchor` slot, kinematic.
-- `Detach()`: removes the joint (or unparents), restores collisions, non-kinematic, small downward speed `detachDownSpeed`, clears the cup link. State is not changed.
-- `Kill()` (IKillable): idempotent. Detach if attached, `SetState(Dead)`. Dead humans stay where they lie.
-- `Stun()`: IsStunned = true for `stunDuration` (timer via coroutine or Invoke, no polling), stars VFX later. No state change.
-- `TickStrength(dt, accel)`: only while attached. If accel > `accelerationThreshold`: strength -= (accel - threshold) * `strengthLossFactor` * dt; else strength += `strengthRecoveryPerSecond` * dt. Clamp 0..`maxStrength`. Fires `StrengthChanged(Strength01)` on change. FixedUpdate calls it with `cup.Acceleration.magnitude`. At 0: `cup.ReleaseOne` equivalent = `Detach()` plus removal from the cup list (Human calls the cup's internal remove; the human stays in the same state while falling).
-- Zone callbacks (trigger enters on the human's side are not used; zones forward to Human methods).
-- State side effects: ChillingInPool: gravity off, velocity zero, linearDamping `poolDrag`. WaitingOnRoof and others: gravity on, damping normal. Dead: collider stays, no zone reaction.
+Full Phase 5 behaviour (physics mode per state, attach points, landing, strength, pool drift) is in section 11 and wins over any older line.
+- Initialize(HumanConfig): stores config, Strength01 = 1, IsFalling = false. HumansSystem then calls `SetState(WaitingOnRoof)`.
+- `SetState(s)`: the only writer of State and the only place that picks the Rigidbody mode (table in section 11). No-op if same state or State == Dead. Calls `HumanAnimator.Apply(s)`, raises `StateChanged`.
+- `AttachTo(cup)`: requires unattached, not Dead. Dynamic mode: ConfigurableJoint (RescuedHanging) or parent to the swim slot (SwimmingInTank); test mode: parent to the slot, kinematic. Strength01 = 1. From WaitingOnRoof -> RescuedHanging, from ChillingInPool -> SwimmingInTank.
+- `Detach()`: removes joint or unparent, restores collisions, clears the cup link, sets `IsFalling = true`, plays the falling trigger. State is not changed. The caller (Cup) then sets the velocity.
+- `Kill()` (IKillable): idempotent. Detach if attached, `SetState(Dead)`.
+- `Stun()`: `IsStunned = true` for `stunDuration` (Invoke, no polling), `HumanAnimator.PlayStun()`, then back to the state's trigger. No state change. The impulse is applied by Cup.TryGrab before calling Stun.
+- `TickStrength(dt, accel)`: section 11. Fires `StrengthChanged(Strength01)`.
+- Landing: public `ReportCollision(Collider other)` (from OnCollisionEnter) and PoolZone / GroundFireZone / RoofSlab calls, section 11. Physics callbacks only forward.
 
 ### HumanAnimator (Rescue)
-`Apply(HumanState)`: if an Animator component exists on the human, `SetTrigger(HumanConfig.trigger<State>)`; otherwise nothing. No required controller.
+`Apply(HumanState)` and `PlayStun()`: trigger names come from HumanConfig (section 11), converted with `Animator.StringToHash`. If the Animator or a parameter is missing: one warning, nothing else. The user's controller `HumanAnimator.controller` is never edited.
 
 ### HumansSystem (Rescue)
-Serialized `List<Human>`. Initialize(): warns if count != `humanCount`, calls `Initialize(config)` on every human, subscribes to each `StateChanged` and re-raises `AnyStateChanged`. `CountIn(s)`, `KillAll()` (Kill on every non-dead human).
+`[Inject] HumanConfig, FireSystem`. Serialized `Human humanPrefab` (prefab asset) and `GameObject scenePreview`. Initialize() spawns (section 11), subscribes to each `StateChanged` and re-raises `AnyStateChanged`. `IReadOnlyList<Human> Humans`, `CountIn(s)`, `KillAll()` (Kill on every non-dead human).
 
 ### PoolZone (Rescue)
-Trigger, layer Water, tag Pool, size from `PoolConfig.poolSize`.
+Trigger, layer Water, tag Pool, size from `PoolConfig.poolSize`. Serialized `Cup cup`, `Transform waterSurface, driftArea`; `float SurfaceY` (world Y of waterSurface), `Bounds DriftBounds` (world box of driftArea scale).
 - `ReportEnter/Stay/Exit(Collider)`:
   - tag Cup (bowl): Enter -> `cup.SetInPool(true)`; Stay -> `cup.FillTick(Time.fixedDeltaTime)`; Exit -> `SetInPool(false)`.
-  - tag Human, unattached and not Dead: Enter -> `SetState(ChillingInPool)`.
+  - tag Human, unattached and not Dead: Enter -> `SetState(ChillingInPool)` (also ends `IsFalling`). It also gives the human a pointer to this pool (SurfaceY, DriftBounds) for floating.
 - Accidental grab is not here: the cup's GrabZone overlaps the pool human and Cup.TryGrab rule 2 handles it.
 
 ### RoofSlab (Fire)
@@ -77,7 +78,7 @@ Replaces RoofZone and RoofSectorMesh (both deleted). Four hand-made, non-overlap
 - `FireSide FireSide`, `bool OnFire`: follows `fireSide.RoofOnFire` (set when the side reaches the top, cleared by Extinguish). Its Update only forwards `roofFireView.SetFill(OnFire ? 1 : 0)` (presentation, one bool read). Only the slab of a side at the top lights up.
 - `ReportStay(Collider other)`: the child trigger box forwards `OnTriggerEnter/Stay` here. While `OnFire`, an `IKillable` in the trigger is killed (`Kill()`), attached or not. Not on fire: nothing.
 - `Bounds SpawnBounds`, `Vector3 GetSpawnPoint()`: world-space bounds of the spawn box; `GetSpawnPoint` returns a random point on the bottom of the spawn box. `OnDrawGizmos` draws the spawn box. Used by HumansSystem in Phase 5.
-- Landing (Phase 5): RoofSlab (Fire) does not know Human. A released human landing on a slab becomes WaitingOnRoof through the Human side: `Human.OnCollisionEnter` forwards to a public `Human` method that checks tag Roof on the other collider (Human collides with Building) and, when unattached and in RescuedHanging or SwimmingInTank, calls `SetState(WaitingOnRoof)`. If that slab is on fire, the slab trigger then kills it.
+- Landing (Phase 5): RoofSlab (Fire) does not know Human. A falling human landing on a slab becomes WaitingOnRoof through the Human side: `Human.OnCollisionEnter` forwards to public `Human.ReportCollision(Collider)`, which checks `GetComponentInParent<RoofSlab>()` on the other collider (Rescue references Fire; Human collides with Building) and, when `IsFalling`, calls `SetState(WaitingOnRoof)`. If that slab is on fire, the RoofFire trigger then kills it.
 
 ### FireSide (Fire)
 See section 4. Two child triggers: burn band (layer FireZone, tag BuildingSide) forwards enter/stay to `ReportEnter/Stay`: any `IKillable` -> `Kill()` (all humans, attached or not; roof humans are above the band). Water catch trigger (full height, layer FireZone) is what WaterDrop hits. Initialize(FireConfig) then `ApplyBuilding(BuildingConfig)` (total height = floors * floorHeight; band depth `burnTriggerDepth`).
@@ -113,36 +114,38 @@ States: S1 WaitingOnRoof, S2 RescuedHanging, S3 ChillingInPool, S4 SwimmingInTan
 
 | From | Event | To | Side effects | Method that does it |
 |---|---|---|---|---|
-| S1 | Cup touch, cup empty | S2 | attach to slot, strength 1 | `Cup.TryGrab` -> `Human.AttachTo` -> `SetState` |
-| S1 | Cup touch, cup partial (not empty, not full) | S1 | Rejected | `Cup.TryGrab` |
-| S1 | Cup touch, cup full | S1 | impulse `bumpImpulse`, stun `stunDuration` | `Cup.TryGrab`, `Human.Stun` |
-| S1 | Cup touch, 2 already attached or grab lock | S1 | Rejected | `Cup.TryGrab` |
+| S1 | Cup touch, tank empty, a hang slot free | S2 | attach to the HangSlot, strength 1 | `Cup.TryGrab` -> `Human.AttachTo` -> `SetState` |
+| S1 | Cup touch, tank not empty (partial or full) | S1 | impulse `bumpImpulse`, `Stun()`; BouncedFull | `Cup.TryGrab`, `Human.Stun` |
+| S1 | Cup touch, `AttachedCount` = maxHumans, no hang slot, or grab lock | S1 | Rejected | `Cup.TryGrab` |
 | S2 | Cup touch (any) | S2 | Rejected (already attached) | `Cup.TryGrab` |
-| S2 | Tug | S2 (falling) | detach, falls; landing decides | `Cup.Tug` -> `ReleaseAll` -> `Human.Detach` |
-| S2 | Strength reaches 0 | S2 (falling) | detach, falls | `Human.TickStrength` -> `Detach` |
-| S2 | Falling, enters PoolZone | S3 | gravity off, drag `poolDrag` | `PoolZone.ReportEnter` -> `SetState` |
-| S2 | Falling, lands on a RoofSlab | S1 | if that slab OnFire then S5 | `Human` collision report (tag Roof) -> `SetState`; `RoofSlab.ReportStay` -> `Kill` |
-| S2 | Touches GroundFire | S5 | detach if attached | `GroundFireZone.ReportEnter` -> `Kill` |
-| S2 | Touches burning side band | S5 | same | `FireSide.ReportEnter` -> `Kill` |
-| S3 | Cup touch, cup empty or partial, bowl in pool | S4 | attach, strength 1 (accident) | `Cup.TryGrab` rule 2 |
-| S3 | Cup touch, cup full, bowl in pool | S3 | bump + stun | `Cup.TryGrab` |
-| S3 | Cup touch, bowl not in pool | S3 | Rejected | `Cup.TryGrab` |
+| S2 | Tug | S2 + Falling | detach, bowl velocity, falls; landing decides | `Cup.Tug` -> `ReleaseAll` -> `Human.Detach` |
+| S2 | Strength reaches 0 | S2 + Falling | detach, falls (no bowl velocity push beyond the current motion) | `Human.TickStrength` -> `Detach` |
+| S2 | Falling, enters PoolZone | S3 | IsFalling off, kinematic float | `PoolZone.ReportEnter` -> `SetState` |
+| S2 | Falling, lands on a RoofSlab | S1 | IsFalling off; if that slab OnFire then S5 | `Human.ReportCollision` (RoofSlab in parent chain) -> `SetState`; `RoofSlab.ReportStay` -> `Kill` |
+| S2 | Touches GroundFireZone (any time) | S5 | detach if attached | `GroundFireZone.ReportEnter` -> `Kill` |
+| S2 | Touches burning RoofSlab fire collider (hanging or falling) | S5 | | `RoofSlab.ReportStay` -> `Kill` |
+| S2 | Touches burning side band | S5 | | `FireSide.ReportEnter` -> `Kill` |
+| S3 | Cup touch, bowl `InPool`, swim slot free, `AttachedCount` < maxHumans | S4 | attach at SwimSlot, strength 1 (the accident), any water level | `Cup.TryGrab` rule 2 |
+| S3 | Cup touch, bowl in pool but no swim slot or no capacity, tank not empty | S3 | impulse `bumpImpulse`, Stun; BouncedFull | `Cup.TryGrab` rule 3 |
+| S3 | Cup touch, bowl not in pool, tank not empty | S3 | impulse + Stun; BouncedFull | `Cup.TryGrab` rule 3 |
+| S3 | Cup touch, tank empty, no slot rule applies | S3 | Rejected | `Cup.TryGrab` |
 | S3 | Pool entry | S3 | none | `PoolZone.ReportEnter` |
-| S3 | Roof / ground fire / side fire | S5 only if the zone touches it (normally unreachable) | | `Kill` |
+| S3 | Roof fire / ground fire / side fire | S5 only if a zone touches it (normally unreachable) | | `Kill` |
 | S4 | Cup touch | S4 | Rejected | `Cup.TryGrab` |
-| S4 | Tug | S4 (falling) | detach | `Cup.Tug` -> `Detach` |
-| S4 | Strength 0 | S4 (falling) | detach | `Human.TickStrength` |
+| S4 | Tug | S4 + Falling | detach with bowl velocity | `Cup.Tug` -> `Detach` |
+| S4 | Strength | unchanged | swimming humans do not lose strength | `TickStrength` ignores S4 |
 | S4 | Falling, enters PoolZone | S3 | as S2 | `PoolZone.ReportEnter` |
-| S4 | Falling, lands on a RoofSlab | S1 | the funny mistake; S5 if the slab is OnFire | `Human` collision report (tag Roof); `RoofSlab.ReportStay` |
+| S4 | Falling, lands on a RoofSlab | S1 | the funny mistake; S5 if the slab is OnFire | `Human.ReportCollision`; `RoofSlab.ReportStay` |
 | S4 | Ground / side fire | S5 | | `Kill` |
 | any non-S5 | Heli crash | S5 | | `HumansSystem.KillAll` -> `Kill` |
-| S1 | Standing on a burning slab (OnFire) | S5 | child trigger Enter/Stay while OnFire, so a human already there dies when the fire reaches the top | `RoofSlab.ReportStay` -> `Kill` |
+| S1 | Standing on a burning slab (OnFire) | S5 | RoofFire trigger Enter/Stay while OnFire, so a human already there dies when the fire reaches the top | `RoofSlab.ReportStay` -> `Kill` |
 | S1 | Side fire | not reachable | roof humans are above the burn band | |
+| S1 | Strength zero | not applicable | only RescuedHanging has strength | |
 | S5 | any event | S5 | all ignored (SetState no-op) | `SetState` guard |
-| S1 | Pool entry (thrown or bounced) | S3 | | `PoolZone.ReportEnter` |
-| S3 | Lands on a RoofSlab (thrown) | S1 | | `Human` collision report (tag Roof) |
+| S1 | Pool entry (bounced or thrown) | S3 | | `PoolZone.ReportEnter` |
+| S3 | Lands on a RoofSlab (thrown) | S1 | | `Human.ReportCollision` |
 
-Landing outcomes summary (from Tug or strength zero): pool -> S3, roof slab -> S1, ground fire -> S5, building side band -> S5. A falling human still counts as pending for the win check, because it keeps S2 or S4 until landing.
+"Falling" is the bool `IsFalling`, not a state: it starts in `Detach` (Tug, ReleaseAll, strength zero) and ends on landing. Landing outcomes: pool -> S3, RoofSlab -> S1, GroundFireZone or burning RoofSlab fire -> S5. A falling human keeps S2 or S4, so it still counts as pending for the win check until it lands.
 
 ## 4. Fire rules (per FireSide, 4 sides, independent)
 - Height01 in 0..1; floor count = Height01 * floors. Growth rate = 1 / (`spreadSecondsPerFloor` * floors) per second, so 60 s to the top with defaults.
@@ -189,7 +192,7 @@ Goal: set up situations and call the same public methods the physics callbacks c
 |---|---|
 | HeliController | Body kinematic. Same smoothing model runs, but velocity is integrated by the controller (`MovePosition/MoveRotation`) from `ScriptedControlSource`. Saves and restores the previous source and kinematic flag. Crash sets flag and event, no fall. |
 | Cup | Segments and bowl kinematic; the chain hangs straight and follows `anchorBody` rigidly (no swing). Acceleration still derived from the position delta, so moving the heli makes humans lose strength. Ignores the F key; the harness calls `Tug`. |
-| Human | Body kinematic. `AttachTo` parents to `cup.HumanAnchor` slot instead of a joint; `Detach` unparents and the harness places the human into a zone or calls the zone's `ReportEnter` (it does not fall). Timers (stun) still run. |
+| Human | Body kinematic in every state. `AttachTo` parents to the cup slot (HangSlot with TankAttachPoint on it, or SwimSlot with FloatPoint on it) instead of a joint; `Detach` unparents, sets `IsFalling`, and the harness then calls `PoolZone.ReportEnter`, `Human.ReportCollision(slabCollider)` or `GroundFireZone.ReportEnter` itself (a kinematic human does not fall). Pool float and drift still run (MovePosition works on kinematic bodies). Stun timer still runs. Strength still drains through `TickStrength`. |
 | WaterDrop | Stays dynamic (see section 10); the harness may call `ReportHit(collider, point)` directly. |
 | FireSide, zones | Not physical actors; no Rigidbody. Triggers still fire against kinematic Rigidbodies. |
 
@@ -203,7 +206,7 @@ HeliConfig: maxHorizontalSpeed 12 [m/s]; maxVerticalSpeed 6 [m/s]; inputRiseTime
 
 CupConfig: capacity 100 [units]; fillRatePerSecond 25 [units/s]; emptyThreshold 0.05 [01]; fullThreshold 0.95 [01]; maxHumans 2; segmentCount 3; segmentLength 2 [m]; jointAngularLimitDeg 40 [deg]; jointSpring 50; jointDamper 8; grabZoneRadius 1.2 [m]; dumpDropRadius 1.5 [m]; bumpImpulse 4 [N s]; (new) bumpUpBias 0.5 [01]; regrabCooldown 1 [s]; humanSlotSpacing 0.8 [m]; bowlMass 2 [kg]; segmentMass 0.5 [kg]; accelerationSmoothing 0.1 [s]; dropLifetime 6 [s, legacy, unused]; (new, Phase 3) fillVisualSmoothTime 0.25 [s, smoothing of the tank water shader fill]; (new, Phase 4, section 10) waterBallRadius 0.6 [m]; waterBallMass 5 [kg]; waterBallLifetime 8 [s]; waterBallKillY -20 [m, world Y].
 
-HumanConfig: maxStrength 100; accelerationThreshold 4 [m/s^2]; strengthLossFactor 6 [strength per m/s^2 over threshold per s]; strengthRecoveryPerSecond 3; stunDuration 2.5 [s]; humanCount 4; animator trigger names (strings) triggerWaitingOnRoof "WaitingOnRoof", triggerRescuedHanging "RescuedHanging", triggerChillingInPool "ChillingInPool", triggerSwimmingInTank "SwimmingInTank", triggerDead "Dead"; (new) poolDrag 4; detachDownSpeed 1 [m/s].
+HumanConfig (Phase 5, see section 11 for use): humanCount 4; mass 60 [kg]; maxStrength 100; accelerationThreshold 4 [m/s^2]; strengthLossFactor 6 [strength per (m/s^2 over threshold) per s]; strengthRecoveryPerSecond 3 [strength/s]; stunDuration 2.5 [s]; hangJointAngularLimitDeg 60 [deg]; hangJointLinearLimit 0.3 [m, unused: linear motion is Locked]; hangJointSpring 200; hangJointDamper 20; floatHeight 0.0 [m, FloatPoint above SurfaceY]; bobAmplitude 0.1 [m]; bobFrequency 0.5 [Hz]; driftSpeed 0.8 [m/s]; driftRetargetTime 4 [s]; driftArriveDistance 0.3 [m, target counts as reached]; driftSeparation 1.2 [m]; deadSettleTime 2.5 [s, Dead turns kinematic]; animator trigger names (strings): waitRescueTrigger "WaitRescue", hangingTrigger "Hanging", chillPoolTrigger "ChillPool", swimInTankTrigger "ChillPool" (no separate clip yet), deadTrigger "Dead", stunnedTrigger "Stunned", fallingTrigger "Hanging". Replaced and unused now: triggerWaitingOnRoof/RescuedHanging/ChillingInPool/SwimmingInTank/Dead, poolDrag, detachDownSpeed (the bowl velocity is inherited instead). `bumpImpulse` 4 and `bumpUpBias` 0.5 stay in CupConfig (the Cup applies the push before `Human.Stun()`).
 
 FireConfig: spreadSecondsPerFloor 12 [s]; maxStopFireTime 20 [s]; extinguishMinWater01 0.9 [01]; groundFirePermanent true; lostSpreadSecondsPerFloor 3 [s]; (new) startDelaySeconds 5 [s]; (new, Phase 3) roofIgniteTime 1.5 [s, smoothing time of the roof fire shader fill, visual only]; (new, Phase 4) roofFireHeight 1.5 [m, height of the RoofFire box above the slab top face].
 
@@ -230,6 +233,8 @@ Order is bottom to top; each module may reference only those above it.
 | 10 | FlameAndBlame.Main | all | MainEntry |
 | - | FlameAndBlame.EditorTools | all, Editor only | ProjectBootstrap |
 | - | FlameAndBlame.Tests.PlayMode | all, test runners | tests |
+
+Phase 5: `HumansSystem` injects `FireSystem` (Rescue -> Fire, allowed) and spawns from `RoofSlab.GetSpawnPoint`, so `fire.Initialize()` must run before `humans.Initialize()` (it does). `Human` reads `RoofSlab` by `GetComponentInParent` (Rescue -> Fire, allowed); nothing in Fire references Rescue.
 
 Initialize order in MainEntry (after ApplyInstall): fire, humans, cup, heli, game, hud, testMode (if assigned). Reasons: fire and humans have no dependencies and own their children; cup needs humans ready for TryGrab; heli needs only config; game subscribes to heli, humans and fire so they exist; hud subscribes to cup, humans, game last; testMode collects actors last. PlayerControlSource, RotorHazard, PoolZone, WaterDrop, HumanAnimator have no Initialize. RoofSlab.Initialize is called by FireSystem.Initialize (not by MainEntry).
 
@@ -301,3 +306,49 @@ CupConfig: waterBallRadius 0.6 [m], waterBallMass 5 [kg], waterBallLifetime 8 [s
 
 ### Phase 4 scene (roof slabs)
 Under `Roof`: `RoofSlab_North/East/South/West`, each with BoxCollider (non-trigger, layer Building, tag Roof), the `RoofSlab` component, a `RoofFire` plain box child, a `HumanSpawnArea` child (both placed by hand in the RoofSlab prefab; RoofFire has the FireZone trigger collider). `FireSystem.roofSlabs` lists the four; `PlayerControlSource.cameraTransform` is the Main Camera.
+
+## 11. Humans (Phase 5)
+Authoritative for Phase 5. Numbers are HumanConfig / CupConfig fields (section 7). The user's assets are kept: `Assets/Models/Human/Animations/HumanAnimator.controller` and `Assets/Prefabs/HumanPrefab.prefab`; scene-builder only adds components and children.
+
+### Prefab and attach points
+- Root: `Human`, `HumanAnimator`, one dynamic Rigidbody (mass `HumanConfig.mass`, interpolate), one CapsuleCollider sized to the body. Layer Human and tag Human on the root and every child. The `Hips` collider is removed or disabled. No child has a Rigidbody (animated bones never fight physics).
+- Child `TankAttachPoint`: the point that hangs from the tank (hands above the head). Child `FloatPoint`: the point that sits on the water line (chest). Plain Transforms the user can move.
+- Cup bowl children (plain Transforms, user-adjustable): `HangSlot_1`, `HangSlot_2` on the rim, `SwimSlot` inside near the top. Cup serialized `Transform[] hangSlots`, `Transform swimSlot`. One human per slot; `maxHumans` (2) counts hanging plus swimming humans together, so a swimming human uses one of the two places.
+- Pool children (plain Transforms, user-adjustable): `WaterSurface` (world Y = water level) and `DriftArea` (its scale is the box humans drift in). `PoolZone.SurfaceY`, `PoolZone.DriftBounds`.
+
+### Physics mode per state (set only inside `Human.SetState`)
+| State | Rigidbody | Placement |
+|---|---|---|
+| WaitingOnRoof | dynamic, rotation frozen, upright | stands on a slab |
+| RescuedHanging | dynamic, rotation free, `Physics.IgnoreCollision` with its own cup's colliders | ConfigurableJoint from TankAttachPoint to its HangSlot (connected body = bowl); linear x/y/z motion **Locked** (hands stay on the slot, the human cannot fly away), angular limit `hangJointAngularLimitDeg`, spring `hangJointSpring`, damper `hangJointDamper` |
+| SwimmingInTank | kinematic, colliders that touch the cup disabled | parented to the cup's swim slot so FloatPoint sits on the slot |
+| ChillingInPool | kinematic, upright | moved with `MovePosition` in FixedUpdate: see Pool floating |
+| Falling (`IsFalling`, state unchanged) | dynamic, rotation free | after Detach (Tug, ReleaseAll, strength 0); ends on landing |
+| Dead | dynamic, then kinematic after `deadSettleTime` (Invoke, no polling) | stays where it died |
+Test mode: every body is kinematic and `AttachTo` parents to the slot (section 6). The Falling mode is applied by `Detach` through the same private mode switch that SetState uses.
+
+### Cup.TryGrab results
+Rules in section 1 (Cup). Summary: Grabbed (empty tank, WaitingOnRoof, hang slot free, or in-pool ChillingInPool with swim slot free), BouncedFull (tank not empty, WaitingOnRoof or ChillingInPool: push + Stun), Rejected (everything else, including Dead, attached, falling, stunned, capacity reached, lock active).
+Stun: the Cup applies `bumpImpulse` away from the bowl, then `Human.Stun()`: `IsStunned` for `stunDuration`, `HumanAnimator.PlayStun()` (Stunned trigger), afterwards the trigger of the human's current state (or the falling trigger if `IsFalling`) plays again. The state does not change.
+
+### Tug and release
+`Cup.Tug()` launches the water ball (unchanged, section 10) and calls `ReleaseAll()`. `ReleaseAll()` calls `Detach()` on each attached human and sets its `Body.linearVelocity` to the bowl's `linearVelocity` (angular velocity too). Each becomes Falling. Landing:
+- Enters a PoolZone: `PoolZone.ReportEnter` -> `SetState(ChillingInPool)`, `IsFalling` false.
+- Collides with a collider whose parent chain has a RoofSlab: `Human.ReportCollision(other)` -> `SetState(WaitingOnRoof)`, stands up upright, `IsFalling` false.
+- Touches a GroundFireZone or the fire collider of a burning RoofSlab: `Kill()`.
+- All ground outside the pool is GroundFireZone (permanent), so a fall to the ground always ends in Dead.
+
+### Strength (RescuedHanging only)
+`TickStrength(dt, accel)`, called from the human's FixedUpdate with `cup.Acceleration.magnitude` (`a`). If `a > accelerationThreshold`: `Strength01 -= (a - accelerationThreshold) * strengthLossFactor * dt / maxStrength`. Otherwise `Strength01 += strengthRecoveryPerSecond / maxStrength * dt`. Clamp 0..1. Strength01 resets to 1 on attach. At 0: cup frees the slot, `Detach()`, Falling. `StrengthChanged` fires only when the value changes. Swimming humans do not drain.
+
+### Pool floating and drifting (ChillingInPool)
+In FixedUpdate, `MovePosition` to a position where `FloatPoint.y = SurfaceY + floatHeight + bobAmplitude * sin(2*pi*bobFrequency*t)` (the human root is offset by the FloatPoint local height). Horizontal: wander toward a random target inside `DriftBounds` at `driftSpeed`. A new target is chosen when the human is within `driftArriveDistance` of its target (own target only) or after `driftRetargetTime`. Separation: `Physics.OverlapSphereNonAlloc(driftSeparation)` on layer Human each FixedUpdate steers away from other pool humans; there is no scan over a list of humans. The target is clamped to `DriftBounds`, so the human never leaves DriftArea. Human yaw turns toward the move direction. Works in test mode.
+
+### Animator trigger mapping
+`HumanAnimator.Apply(state)` sets a trigger by hash from HumanConfig: WaitingOnRoof -> `waitRescueTrigger` ("WaitRescue"), RescuedHanging -> `hangingTrigger` ("Hanging"), ChillingInPool -> `chillPoolTrigger` ("ChillPool"), SwimmingInTank -> `swimInTankTrigger` ("ChillPool"), Dead -> `deadTrigger` ("Dead"). `PlayStun()` -> `stunnedTrigger` ("Stunned"). Falling plays `fallingTrigger` ("Hanging") from `Detach`. Names are converted with `Animator.StringToHash` once at Initialize. Missing Animator or parameter: one warning, no-op. The Animator is not required.
+
+### Spawning (HumansSystem.Initialize)
+1. Disable `scenePreview` (the scene instance of the prefab).
+2. For i in 0..`humanCount`-1: slab = `FireSystem.RoofSlabs[i % count]`; `Instantiate(humanPrefab)` at `slab.GetSpawnPoint()`, random yaw, parent `Game/Actors/Humans`; `Initialize(config)`; `SetState(WaitingOnRoof)`.
+3. Subscribe to every `StateChanged`, re-raise `AnyStateChanged`. `Humans` lists the spawned instances.
+`FireSystem.Initialize` (which initializes the slabs) runs first.

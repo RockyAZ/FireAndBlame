@@ -101,33 +101,47 @@ Step 7, main agent: update PROGRESS.md, and tell me what to check by eye in Play
 
 ## Phase 5: humans
 
-**Output:** Human with its state machine, attach and detach, stun and strength, HumanAnimator with a blank default, Cup.TryGrab rules, the pool grab by mistake (state 4), and the roof and ground consequences. Humans spawned on the RoofSlab spawn areas.
+**Your assets (keep them):**
+- Animator controller `Assets/Models/Human/Animations/HumanAnimator.controller` with 5 triggers from Any State: `Stunned`, `Hanging`, `ChillPool`, `WaitRescue`, `Dead`.
+- Prefab `Assets/Prefabs/HumanPrefab.prefab` (a variant of the human model) with the Animator already set. It has a collider on its `Hips` child.
+- One instance of the prefab in Main.unity, used as an editing preview.
 
-**Gate:** all five states are reachable and tested.
+**Output:** Human with its state machine and physics per state, attach points you can adjust by hand, HumanAnimator driving your triggers, Cup grab and release rules, strength, roof, pool and ground consequences, pool floating and drifting, and HumansSystem spawning humans from the prefab on the RoofSlab spawn areas at runtime.
+
+**Gate:** in real Play mode, humans appear on the roof slabs, hang from the tank when grabbed with an empty tank, get stunned by a full tank, fall when released or when strength runs out, float and drift in the pool, and can be scooped into the tank by mistake. All five states are reachable and tested, and all earlier tests still pass.
 
 **Prompt:**
 ```
-Read CLAUDE.md, GAME_DESIGN.md, TASKS.md and PROGRESS.md. Phase 5 only. Use the subagents.
+Read CLAUDE.md (including "Contract additions (Phase 5: humans)"), brief.md, GAME_DESIGN.md, TASKS.md and PROGRESS.md. Phase 5 only. Use the subagents. Minimize screenshots.
+The user made the animator controller and HumanPrefab by hand. Keep them; only add components and child objects to the prefab.
 
-Step 1, gameplay-coder: write Human, HumanAnimator, strength logic, Cup.TryGrab and ReleaseAll, and the human branches in PoolZone, RoofSlab and GroundFireZone. HumansSystem spawns humans at RoofSlab.GetSpawnPoint() using FireSystem.RoofSlabs.
+Step 1, game-designer: rewrite the Phase 5 parts of GAME_DESIGN.md and TASKS.md from "Contract additions (Phase 5: humans)": physics mode per state, attach points, pool floating and drifting, animator trigger mapping, spawning. Do not change the contract.
 
-Step 2, compiler: check that the project compiles.
+Step 2, gameplay-coder: write Human, HumanAnimator, HumansSystem, the HumanConfig fields, Cup.TryGrab, Cup.ReleaseAll, the Cup hang and swim slots, the human branches in Cup.Tug, PoolZone, GroundFireZone and the roof landing, and the PoolZone surface and drift area. Spawn humans with Instantiate from the prefab asset. Add HumansSystem to MainEntry if it is not already initialized there.
 
-Step 3, scene-builder: create a Human prefab (Human layer and tag, Rigidbody, capsule collider) and assign it to HumansSystem. Humans are spawned on the RoofSlab spawn areas at start, not placed by hand.
+Step 3, compiler: check that the project compiles.
 
-Step 4, compiler: check that the project compiles.
+Step 4, scene-builder: edit Assets/Prefabs/HumanPrefab.prefab:
+- on the root, add Human, HumanAnimator (Animator assigned), a dynamic Rigidbody and a CapsuleCollider sized to the body; set layer Human and tag Human on the root and all children,
+- remove the Hips collider or disable it (the root capsule replaces it); make sure no child has a Rigidbody,
+- add the children TankAttachPoint (at the hands, above the head) and FloatPoint (at chest height) and assign them.
+On the Cup bowl, add HangSlot_1, HangSlot_2 (on the rim, opposite sides) and SwimSlot (inside, near the top) and assign them. On the Pool, add the WaterSurface and DriftArea children and assign them to PoolZone. Assign the prefab asset to HumansSystem.humanPrefab and the scene instance to HumansSystem.scenePreview. Read every new field back to confirm none is null.
 
-Step 5, playtester: write and run tests showing that:
-- an empty cup grabs up to 2 humans,
-- a full cup bounces the human and stuns it,
-- a pool grab gives state 4,
-- release over the pool gives state 3,
-- release over the roof gives state 1,
-- release over ground fire gives state 5,
-- roof fire kills,
-- strength drops when acceleration is above the threshold, and the human falls at zero.
+Step 5, compiler: check that the project compiles.
 
-Step 6, main agent: update PROGRESS.md.
+Step 6, playtester: with test mode OFF and real physics where possible, write and run tests showing that:
+- HumansSystem spawns humanCount humans inside the RoofSlab spawn areas, and the scene preview is disabled,
+- an empty tank touching a WaitingOnRoof human attaches it at a HangSlot (RescuedHanging), and a third human is rejected,
+- a tank with water bounces a human and stuns it, and the Stunned trigger fires, then the human returns to its state,
+- a tank in the pool touching a ChillingInPool human puts it in SwimmingInTank at SwimSlot,
+- Tug releases every attached human, they inherit the tank velocity, and they land as: pool gives ChillingInPool, roof slab gives WaitingOnRoof, ground fire gives Dead,
+- hanging strength drops while tank acceleration is above the threshold and recovers below it, and at zero the human falls,
+- a pool human stays with its FloatPoint at the water surface plus floatHeight, moves horizontally, and stays inside DriftArea,
+- a human on a burning slab dies,
+- each state change fires the matching animator trigger.
+Rerun all earlier tests.
+
+Step 7, main agent: update PROGRESS.md, and tell me what to check by eye and which Transforms to move to adjust hanging and floating.
 ```
 
 ---
@@ -142,11 +156,12 @@ Step 6, main agent: update PROGRESS.md.
 ```
 Read CLAUDE.md, GAME_DESIGN.md, TASKS.md and PROGRESS.md. Phase 6 only. Use the subagents.
 
-Step 1, gameplay-coder: write GameManager, HumanStrengthBar and ResultPanel. Skip WaterGauge: the tank shading is the water indicator.
+Step 1, gameplay-coder: write GameManager, HumanStrengthBar and ResultPanel. WaterGauge: the tank shading is the water indicator and near it there is also a 0-100% world-space percentage indication. Win loose condition. Win score (depends on how many humans survived)
 
 Step 2, compiler: check that the project compiles.
 
-Step 3, scene-builder: build the result panel on the existing Canvas, add a world-space strength bar to each human, and wire GameManager. Assign the fields.
+Step 3, scene-builder: build the result panel on the existing Canvas, add a world-space strength bar to each human, and wire GameManager. Assign the fields. WaterGauge: the tank shading is the water indicator and near it there is also a 0-100% world-space percentage indication.
+
 
 Step 4, compiler: check that the project compiles.
 

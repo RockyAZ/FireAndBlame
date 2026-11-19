@@ -218,3 +218,36 @@ Full behaviour in GAME_DESIGN.md.
 - Input smoothing (inputRiseTime, inputFallTime) applies to MoveWorld in world space. The camera orbit stays in world space, so turning the heli does not turn the camera or change the move direction.
 - UIConfig default `controlsHintText`: "WASD move (camera) | Space/Ctrl up/down | Z/X turn | F drop water | Mouse look | Wheel zoom".
 
+## Contract additions (Phase 5: humans). These override earlier human lines where they differ.
+User assets (keep them, only add to them): `Assets/Models/Human/Animations/HumanAnimator.controller` (triggers from Any State: `Stunned`, `Hanging`, `ChillPool`, `WaitRescue`, `Dead`) and `Assets/Prefabs/HumanPrefab.prefab` (model variant, Animator set, Apply Root Motion off, collider on child `Hips`). One preview instance of the prefab is in Main.unity.
+
+Prefab setup:
+- Root: `Human`, `HumanAnimator`, one dynamic `Rigidbody` (mass `HumanConfig.mass`, interpolate), one `CapsuleCollider` sized to the body. Layer Human, tag Human on the root and all children.
+- The Hips collider is removed or disabled. No child has a Rigidbody, so the animated bones never fight the physics.
+- Child `TankAttachPoint`: the point on the human that hangs from the tank (hands above the head). Child `FloatPoint`: the point that sits on the water line (chest). Both are plain Transforms the user moves by hand to adjust the look.
+
+Cup bowl children (plain Transforms, user-adjustable): `HangSlot_1`, `HangSlot_2` on the rim, `SwimSlot` inside near the top. Cup serialized `Transform[] hangSlots`, `Transform swimSlot`. A slot holds at most one human; `maxHumans` (2) counts hanging and swimming humans together.
+
+Pool children (plain Transforms, user-adjustable): `WaterSurface` (its world Y is the water level), `DriftArea` (its scale is the box humans drift inside). PoolZone serialized `Transform waterSurface, driftArea`; `float SurfaceY`; `Bounds DriftBounds`.
+
+Physics mode per state (set only inside `Human.SetState`):
+| State | Rigidbody | Placement |
+|---|---|---|
+| WaitingOnRoof | dynamic, rotation frozen, upright | stands on a slab |
+| RescuedHanging | dynamic, rotation free, collisions with its own cup ignored (Physics.IgnoreCollision) | ConfigurableJoint from TankAttachPoint to its HangSlot; limits, spring and damper from HumanConfig |
+| SwimmingInTank | kinematic, colliders that hit the cup disabled | parented to the cup's free slot so FloatPoint sits on the slot |
+| ChillingInPool | kinematic, upright | moved with MovePosition in FixedUpdate: FloatPoint height = SurfaceY + floatHeight + bob (sin, bobAmplitude, bobFrequency); wanders toward random targets inside DriftBounds at driftSpeed, picks a new target when close or after driftRetargetTime, keeps driftSeparation from other pool humans |
+| Falling (no enum value, `bool IsFalling`) | dynamic, rotation free | after release or strength zero; ends on landing |
+| Dead | dynamic, then kinematic when it comes to rest | stays where it died |
+Test mode keeps the earlier rule: kinematic everywhere, attach by parenting to the slot.
+
+Transitions (all physics callbacks only forward to public methods):
+- Cup grab zone touches a human (`Cup.TryGrab`): tank empty (Water01 <= emptyThreshold), human WaitingOnRoof, a hang slot free gives RescuedHanging. Tank not empty and human WaitingOnRoof or ChillingInPool outside the pool fill: `Stun()` (impulse bumpImpulse away from the cup, Stunned trigger for stunDuration, then the state's trigger again) and returns BouncedFull. Tank inside the pool (`Cup.InPool`) and human ChillingInPool and a slot free gives SwimmingInTank. Otherwise Rejected.
+- `Cup.Tug()` / `ReleaseAll()`: every attached human detaches, becomes Falling, and gets the bowl's velocity.
+- Landing while Falling: inside a PoolZone gives ChillingInPool; collision with a collider whose parent chain has a RoofSlab gives WaitingOnRoof (stand up upright); touching a GroundFireZone or a burning RoofSlab fire collider gives Dead (Kill()).
+- Strength (RescuedHanging only): if |Cup.Acceleration| > accelerationThreshold, Strength01 -= (|a| - threshold) * strengthLossFactor * dt / maxStrength; otherwise it recovers by strengthRecoveryPerSecond / maxStrength. At 0 the human detaches and becomes Falling. Strength resets to 1 on attach.
+
+Animator (`HumanAnimator.Apply(HumanState)` and `PlayStun()`): HumanConfig holds the trigger names: waitRescueTrigger "WaitRescue", hangingTrigger "Hanging", chillPoolTrigger "ChillPool", swimInTankTrigger "ChillPool" (no separate clip yet), deadTrigger "Dead", stunnedTrigger "Stunned", fallingTrigger "Hanging". Uses Animator.StringToHash. If the Animator or a parameter is missing, it logs one warning and does nothing.
+
+Spawning: `HumansSystem` ([Inject] HumanConfig, FireSystem) serialized `Human humanPrefab` (the prefab ASSET) and `GameObject scenePreview` (the scene instance, disabled in Initialize). Initialize instantiates `humanCount` humans round-robin over `FireSystem.RoofSlabs` at `GetSpawnPoint()` with a random yaw, parents them under `Game/Actors/Humans`, calls `Initialize(config)` and sets WaitingOnRoof. `IReadOnlyList<Human> Humans`.
+
