@@ -32,6 +32,12 @@ namespace FlameAndBlame.Heli
 		[Tooltip("Mass of each broken-off part [kg].")] public float breakPartMass = 1f;
 		[Tooltip("Seconds before debris is destroyed; 0 keeps it forever.")] public float debrisLifetime = 0f;
 
+		[Header("Rotor blur")]
+		[Tooltip("Main rotor speed at full factor [turns/s].")] public float mainRotorTurnsPerSecond = 6f;
+		[Tooltip("Tail rotor speed at full factor [turns/s].")] public float tailRotorTurnsPerSecond = 12f;
+		[Tooltip("Speed factor with no input.")] public float rotorIdleFactor = 0.8f;
+		[Tooltip("Speed factor at full climb input.")] public float rotorLoadFactor = 1.2f;
+
 		[Header("Camera")]
 		[Tooltip("Orbit yaw per mouse pixel [deg/px].")] public float cameraYawSensitivity = 0.15f;
 		[Tooltip("Orbit pitch per mouse pixel [deg/px].")] public float cameraPitchSensitivity = 0.15f;

@@ -32,7 +32,9 @@ namespace FlameAndBlame.EditorTools
 			("Heli", "Building"), ("Heli", "Ground"), ("Heli", "Obstacle"),
 			("Cup", "Building"), ("Cup", "Ground"), ("Cup", "Obstacle"), ("Cup", "Human"), ("Cup", "Water"),
 			("Human", "Building"), ("Human", "Ground"), ("Human", "Obstacle"), ("Human", "FireZone"), ("Human", "Water"),
-			("Water", "FireZone"), ("Water", "Building"), ("Water", "Ground"), ("Water", "Obstacle"), ("Water", "Water")
+			("Water", "FireZone"), ("Water", "Building"), ("Water", "Ground"), ("Water", "Obstacle"), ("Water", "Water"),
+			// Heli debris (layer Obstacle after a crash) must land on the ground and hit walls and other debris.
+			("Obstacle", "Ground"), ("Obstacle", "Building"), ("Obstacle", "Obstacle")
 		};
 
 		private static readonly string[] StrictLayers = { "Rotors", "Cup", "Human" };

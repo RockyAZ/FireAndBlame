@@ -235,7 +235,7 @@ namespace FlameAndBlame.Tests.PlayMode
                 yield return new WaitForSeconds(0.3f);
                 int calm = inside.Kills;
                 Ignite(slab.FireSide);
-                yield return new WaitForSeconds(0.3f);
+                yield return new WaitForSeconds(0.3f + _fc.roofIgniteTime);   // Fire01 must grow past roofFireKillThreshold
                 Debug.Log($"[TEST-INFO] {n} {Nm(slab)} kills notBurning={calm} burningInside={inside.Kills} burningAbove={above.Kills} OnFire={slab.OnFire}");
                 if (calm != 0) fail = fail ?? $"{Nm(slab)}: killed {calm}x while not on fire";
                 if (inside.Kills == 0) fail = fail ?? $"{Nm(slab)}: not killed inside the fire collider while OnFire";

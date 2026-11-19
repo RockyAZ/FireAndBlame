@@ -23,7 +23,7 @@ namespace FlameAndBlame.Fire
 		/// <summary>Only when groundFirePermanent is false: the zone is switched off for maxStopFireTime.</summary>
 		public void Extinguish(float amount01)
 		{
-			if (_config == null || _config.groundFirePermanent || amount01 < _config.extinguishMinWater01) return;
+			if (_config == null || _config.groundFirePermanent || amount01 <= 0f) return;
 			if (_collider != null) _collider.enabled = false;
 			if (groundFireEffect != null) groundFireEffect.Stop();
 			CancelInvoke(nameof(Restore));

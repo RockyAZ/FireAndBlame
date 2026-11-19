@@ -285,7 +285,75 @@ Gameplay numbers live in the ScriptableObjects in `Assets/Settings/` (asset valu
 - **HeliConfig.asset**: flight (speed, maxAcceleration, input rise/fall), auto-align (`autoAlignToCamera`, `alignMaxYawRate`, `alignGain`, `alignSmoothTime`), camera (`camera*`), crash debris (`breakImpulse`, `breakSpin`, `breakPartMass`, `debrisLifetime`, where 0 keeps the debris forever).
 - **CupConfig.asset**: tank fill and empty, joint chain, `maxHumans`, `regrabCooldown`, the shake measure (`shakeVelocitySmoothing`, `accelerationSmoothing`, `shakeMaxRawAcceleration`, `shakeRiseTime`, `shakeFallTime`, `shakeTeleportSpeed`, `grabGraceTime`), `fillVisualSmoothTime`.
 - **HumanConfig.asset**: how hard humans hold on (`accelerationThreshold` 3.5, `strengthLossFactor`, `strengthRecoveryPerSecond`, `maxStrength`, `strengthGraceTime`), stun (`bumpImpulse`, `stunDuration`), pool float and drift, the hang joint, animator trigger names.
-- **FireConfig.asset**: burn speed, `extinguishMinWater01`, `maxStopFireTime`, `roofIgniteTime`, `roofFireHeight`, ground fire.
+- **FireConfig.asset**: burn speed, `maxStopFireTime` (`extinguishMinWater01` unused since Phase 8), `roofIgniteTime`, `roofFireHeight`, ground fire.
 - **BuildingConfig.asset**: floors and floor height.
 - **GameRulesConfig.asset**: score per rescue, death and side, and the end conditions. **UIConfig.asset**: controls hint text and layout.
 - Look (not gameplay): per-material properties on `Assets/Materials/M_*.mat` (`_RampSteps`, `_ShadowColor`, `_WireStrength`, `_WireWidth`, `_OutlineWidth`, `_OutlineColor`). Particle rates, sizes and colours are on the particle systems in `Assets/Prefabs/VFX/*.prefab`. Effect placement is in Building_Side, RoofSlab, HumanPrefab and the GroundFire zones.
+
+## Phase 8: DONE (2026-11-19), pending your by-eye Play mode check
+Transparent blue water drop, fire put out in proportion to the tank fill (sides and roofs), and a shader rotor blur.
+
+Gate: compile clean (0 errors, 0 warnings; RotorBlur.shader loads as supported). Full PlayMode run: **53/53 PASS** (45 earlier + 8 new in `Phase8Tests.cs`, all with test mode off). The flaky `move_ignores_heli_yaw` and `yaw_keys_z_x` passed. No fix rounds.
+
+### Done
+- **Docs**: GAME_DESIGN.md section 12, TASKS.md Phase 8 (P8-1 to P8-10). Contract unchanged.
+- **Drop look**: `Assets/Materials/M_WaterDrop.mat` (URP Lit, transparent, alpha blend, base (0.2, 0.55, 1.0, 0.45), smoothness 0.9, `_BlendModePreserveSpecular` 0 so URP keeps plain alpha blend). Assigned to the `Visual` child of `WaterDrop.prefab` (its old material reference was broken). Trail unchanged.
+- **Proportional extinguishing**: `FireSide.Extinguish(a)`: lost or a <= 0 does nothing; `Height01 *= 1 - a`; pause = max(running, `maxStopFireTime * a`); clears RoofOnFire; raises `event Action<float> Extinguished`. After the pause the fire grows again from the reduced height (no reset to 0). `extinguishMinWater01` is no longer read (FireSide, GroundFireZone); the field stays, tooltip says obsolete.
+- **Roof fire level**: `RoofSlab.Fire01` grows by dt / `roofIgniteTime` while its side is at the top and not paused; it is scaled by `1 - a` through the side's `Extinguished` event (a drop hitting a slab extinguishes that side, so side and slab are each scaled once). `OnFire = Fire01 > roofFireKillThreshold` (new FireConfig field, 0.1); only then it kills. `roofFireView.SetFill(Fire01)`; roof fire and smoke follow OnFire.
+- **Drop amount**: `Cup.Tug` already passed Water01 to `Launch` before emptying; unchanged.
+- **Rotor blur**: `Assets/Shaders/RotorBlur.shader` (URP Unlit HLSL, transparent, Cull Off, ZWrite Off, SRP-batcher CBUFFER), `M_RotorBlur_Main` / `M_RotorBlur_Tail`, `RotorBlurView` (VFX; `SetSpeed`, `SetVisible`, `Speed`, `Angle`, `IsVisible`, MaterialPropertyBlock). Heli asmdef references `FlameAndBlame.VFX`. HeliConfig: `mainRotorTurnsPerSecond` 6, `tailRotorTurnsPerSecond` 12, `rotorIdleFactor` 0.8, `rotorLoadFactor` 1.2. HeliController: `mainRotorBlur`, `tailRotorBlur`, `bladeRenderers`; speed factor = lerp(idle, 1, max(|move|, |vertical|)) then lerp toward load by the climb input (smoothed input). Initialize hides blades, shows blur; Crash hides blur and shows blades before the break-apart; blur quads are excluded from debris.
+- **Scene**: `MainRotor/RotorBlur` (Quad, no collider, rot (90,0,0), scale (1,14,1) = 7 m disc, horizontal) and `TailRotor/RotorBlur` (rot (0,90,0), scale (2.33,1,1) = 1.4 m disc in the tail blade plane). Layer Heli, no shadows. Wired on HeliController; `bladeRenderers` = the MainRotor and TailRotor cubes. Rotor colliders read back unchanged.
+- **Tests**: `partial_water_no_effect` rewritten for the proportional rule; `burning_slab_kills_killable` waits for Fire01 to pass the threshold. New: `p8_waterdrop_material_transparent`, `p8_extinguish_proportional`, `p8_extinguish_pause`, `p8_roof_fire01_scales_and_kills`, `p8_lost_side_ignores_water`, `p8_rotor_blur_while_flying`, `p8_crash_blades_become_debris`, `p8_rotor_hit_still_crashes`.
+
+### Open issues
+- **Phase 4 water ball still not implemented** (layer 16 WaterBall missing in TagManager and ProjectBootstrap; WaterDrop is still the trigger drop). Phase 8 did not touch it.
+- `_BladeCount` is **2** on both blur materials, because each rotor model is one bar through the hub (two blade ends). Set it to 4 if you want a four-blade look.
+- The vfx-artist hand-wrote `.meta` files for the 3 new materials and the shader (fixed GUIDs, against the "no .meta" rule). Unity accepted them.
+- The blur's spin direction and look were never seen rendered. If it spins the wrong way, flip the sign of the speed in `RotorBlurView`.
+- The rotor collider test checks layer, type, count and transforms; collider size/centre are only logged.
+- `ProjectSettings/DynamicsManager.asset` changed during this phase: two bits for unnamed layers 6 and 7 in the Ground and Obstacle rows of the collision matrix were cleared (Editor rewrite). No named layer is affected.
+- Two stale console errors from a failed material assignment by path during scene wiring (the wiring itself succeeded).
+
+### Check by eye (Play mode)
+- Drop water (F): the ball looks like clear, see-through blue water with its trail.
+- Douse a side with a partly full tank (about 20%): the wall fire drops by about a fifth, pauses briefly, then climbs again from there. A full tank clears it and pauses longest. Even a little water lowers it visibly.
+- Let a side reach the top: the roof fire grows over `roofIgniteTime`. Water shrinks it by the same share; a mostly doused roof (below 10%) shows a faint flame but no longer kills.
+- The main and tail rotors look like fast blurred discs with streaks, no solid blades. They spin a bit slower when idle and faster when climbing.
+- Fly a rotor into a wall: the heli crashes, the blur discs vanish and the real blades fly off with the debris.
+
+### Tuning guide (Phase 8)
+- **Drop look**: `Assets/Materials/M_WaterDrop.mat`: Base Map colour and its alpha (transparency), Smoothness, Metallic. Keep Surface Type Transparent / Blend Alpha.
+- **Rotor blur look**: `Assets/Materials/M_RotorBlur_Main.mat` and `M_RotorBlur_Tail.mat`: `_BladeCount`, `_BladeColor`, `_DiscColor` (faint disc, alpha about 0.08), `_BladeWidth` (solid core, in turns), `_Smear` (streak length, in turns), `_HubRadius`, `_TipFade`. Disc size: the `RotorBlur` child scale under MainRotor / TailRotor.
+- **Rotor blur speed**: `HeliConfig.asset`: `mainRotorTurnsPerSecond`, `tailRotorTurnsPerSecond`, `rotorIdleFactor` (no input), `rotorLoadFactor` (full climb).
+- **Extinguishing**: `FireConfig.asset`: `maxStopFireTime` (pause for a full tank, scaled by the amount), `roofIgniteTime` (roof fire growth time), `roofFireKillThreshold` (roof kills above this level).
+
+## Follow-up (user request, 2026-11-19): cup chain visual, underwater pool surface
+Gate: compile clean, shaders clean. Full PlayMode run: **56/56 PASS** (53 earlier + 3 new in `VisualFixTests.cs`, test mode off).
+
+### Done
+- **Chain visual**: `Assets/Scripts/Rescue/CupChainView.cs` on `Game/Actors/Heli/Cup` (fields `cup`, `material` = M_Cup, `linkRadius` 0.06, `jointSize` 0.16, `castShadows`). Once `Cup.Joints` exist it builds a scene-root object `CupChainView` with one capsule per link (heli hang point -> segment -> ... -> bowl surface) and one small cube per joint pivot, and places them every LateUpdate. No colliders, no Rigidbody, not under the heli, so a crash never makes them debris. All chain segments now interpolate (before: bowl only), so the links move smoothly.
+- **Underwater pool**: root cause was `PoolSurface` sharing `M_Water` (fill alpha 0.8, queue 3000) with the cup bowl and sorting after the cup UI. New `Assets/Shaders/PoolWater.shader` + `Assets/Materials/M_PoolWater.mat` on `PoolSurface` only (bowl keeps M_Water). It samples the opaque scene behind the surface, blurs and tints it blue more strongly with depth, adds ripple refraction, a sun highlight and fresnel. Queue 2990, ZWrite Off, so the bowl and all world-space UI draw after it, sharp. PoolSurface shadows off. Opaque Texture and Depth Texture are now on in both URP assets (Mobile was off).
+- Tests: `cup_chain_view_built`, `cup_chain_view_follows` (incl. crash), `pool_surface_underwater_material`.
+
+### Known limits
+- Only opaque objects (humans, pool floor and walls) get blurred. The bowl water (transparent M_Water) and the UI draw crisp on top, by design.
+- The underwater look has not been seen in Play mode yet.
+
+### Check by eye
+- The chain from heli to bowl is visible as grey links with small joint cubes, swinging with the bowl; on a crash the links stay with the cup chain, not with the debris.
+- Lower the cup into the pool: the tank, the water gauge, the shake meter and the human strength bars stay clearly readable; humans in the pool look blurred and blue, more so the deeper they are; the surface ripples.
+
+### Tuning
+- Chain: `CupChainView` on the Cup (`linkRadius`, `jointSize`, `material`, `castShadows`, `drawBowlLink`).
+
+### Follow-up: chain ends at the last joint
+- `CupChainView.drawBowlLink` (default off): the last link into the bowl is no longer drawn; the visual ends at the last joint cube (`Joint_2`).
+- New empty `Game/Actors/Heli/Cup/Bowl/ChainAttachPoint` at local (0, 2, 0) = the last joint's anchor (`up * segmentLength` in bowl space), so it always coincides with `Joint_2`. Put hand-made static attachments (bowl to joint) under it. If `CupConfig.segmentLength` changes, move it to (0, segmentLength, 0).
+- Test `cup_chain_attach_point_matches_last_joint` (within 0.05 m at rest and in flight). Full suite **57/57 PASS**.
+- Pool: `Assets/Materials/M_PoolWater.mat`: `_ShallowColor` (tint), `_DeepColor`, `_DepthFade` (metres to full fog), `_MaxFog`, `_MinBlur` / `_BlurRadius` (pixels at the surface / at depth), `_Distortion`, `_RippleScale`, `_RippleSpeed`, `_HighlightColor` (alpha = strength), `_HighlightSharpness`, `_FresnelStrength`.
+
+## Follow-up (user request, 2026-11-19): debris on the ground, second rotor collider
+- **Debris**: crash debris gets layer Obstacle, which ignored Ground, so it fell through. `ProjectBootstrap` (the source of truth for the matrix; it reapplies on every compile) now also allows Obstacle x Ground, Obstacle x Building and Obstacle x Obstacle. Written to `DynamicsManager.asset`.
+- **SecondRotorCollider** (user-added, `Game/Actors/Heli/MainRotor/SecondRotorCollider`, BoxCollider, not a trigger): set to layer Rotors, tag Rotor. `HeliController.OnCollisionEnter` now finds the hazard with `GetComponentInParent<RotorHazard>()`, so any collider on or under a rotor crashes the heli through that rotor's RotorHazard.
+- **Chain view**: pivots now sit on each joint's own (lower body) anchor and links run pivot to pivot, so `Joint_2` stays exactly on `Bowl/ChainAttachPoint` even when the joint stretches in flight (it drifted up to ~9 cm before).
+- Tests: new `CrashFixTests.cs` (`debris_lands_on_ground`, `second_rotor_collider_crashes`); `p8_rotor_blur_while_flying` now compares rotor transforms against their values at load (the rotors were re-tuned by hand) and allows child colliders under a rotor. Full suite **59/59 PASS**.

@@ -87,7 +87,8 @@ namespace FlameAndBlame.Rescue
 				rb.mass = isBowl ? _config.bowlMass : _config.segmentMass;
 				rb.useGravity = true;
 				rb.isKinematic = false;
-				if (isBowl) rb.interpolation = RigidbodyInterpolation.Interpolate;
+				// All links interpolate so the chain visual (CupChainView) moves smoothly with the bowl.
+				rb.interpolation = RigidbodyInterpolation.Interpolate;
 				var joint = AddJoint(rb, prev, prevAnchor, len);
 				// The heli is effectively immovable for the first joint, so the chain cannot kick it.
 				// connectedMassScale scales the connected body's INVERSE mass, so a heavier heli means a smaller value.

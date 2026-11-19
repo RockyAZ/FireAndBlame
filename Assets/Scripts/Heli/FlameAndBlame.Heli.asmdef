@@ -1,7 +1,7 @@
 {
     "name": "FlameAndBlame.Heli",
     "rootNamespace": "FlameAndBlame.Heli",
-    "references": ["Injection", "FlameAndBlame.Core", "Unity.InputSystem", "Unity.Cinemachine"],
+    "references": ["Injection", "FlameAndBlame.Core", "FlameAndBlame.VFX", "Unity.InputSystem", "Unity.Cinemachine"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

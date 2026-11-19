@@ -11,7 +11,7 @@ Every module is a folder with its own assembly definition and namespace. `Assets
 |---|---|---|---|
 | Injection | Injection | none | existing DI |
 | Core | FlameAndBlame.Core | Injection | enums, HeliCommand, IControlSource, ITestModeAware, IKillable |
-| Heli | FlameAndBlame.Heli | Injection, Core, Unity.InputSystem | HeliConfig, HeliController, PlayerControlSource, RotorHazard |
+| Heli | FlameAndBlame.Heli | Injection, Core, VFX, Unity.InputSystem | HeliConfig, HeliController, PlayerControlSource, RotorHazard |
 | Fire | FlameAndBlame.Fire | Injection, Core, VFX | FireConfig, BuildingConfig, FireSide, FireSystem, GroundFireZone |
 | Rescue | FlameAndBlame.Rescue | Injection, Core, Fire, VFX | CupConfig, HumanConfig, Cup, WaterDrop, Human, HumanAnimator, HumansSystem, PoolZone, RoofZone |
 | VFX | FlameAndBlame.VFX | Injection, Core | effect controllers (Play/Stop) |
@@ -264,4 +264,22 @@ Spawning: `HumansSystem` ([Inject] HumanConfig, FireSystem) serialized `Human hu
 - Rescue: `Cup.ShakeMagnitude` (smoothed shake, used for the strength drain and the shake meter), `Cup.ResetShake()`. CupConfig: `shakeVelocitySmoothing`, `shakeMaxRawAcceleration`, `shakeRiseTime`, `shakeFallTime`, `shakeTeleportSpeed`, `grabGraceTime`. HumanConfig: `strengthGraceTime`. `WaterDrop`: `event Action<WaterDrop, FireSide> Hit` (null side if nothing was extinguished).
 - VFX: `EffectController` base with `Play()`/`Stop()` only; FireEffect, SmokeEffect, GroundFireEffect, WaterDropEffect, SplashEffect, StunStarsEffect. Optional serialized refs: FireSide `fireEffect`/`smokeEffect`, RoofSlab `roofFireEffect`/`roofSmokeEffect`, GroundFireZone `groundFireEffect`, WaterDrop `trailEffect`/`splashPrefab`, Human `stunStars`, Cup `tugSplashPrefab`.
 - Look: `Assets/Shaders/ToonOutline.shader` (toon lighting, UV-border wire, inverted-hull outline, no geometry shader) for the environment and heli materials in `Assets/Materials/`. Fire and water keep FillEffect.
+
+## Contract additions (Phase 8). These override earlier lines where they differ.
+Water drop look:
+- `Assets/Materials/M_WaterDrop.mat`: URP Lit, Surface Type Transparent, Blend Alpha, base color blue (about 0.2, 0.55, 1.0) with alpha 0.45, smoothness 0.9, metallic 0, emission off. It is assigned to the WaterDrop prefab's renderer. Look values live on the material.
+
+Proportional extinguishing (replaces the extinguishMinWater01 rule):
+- The drop carries `amount01` = the tank's Water01 at the moment of the drop (Cup.Tug passes it to WaterDrop.Launch).
+- `FireSide.Extinguish(float amount01)`: if the side is lost, do nothing. Otherwise `Height01 = Height01 * (1 - amount01)`, so a full tank (1) removes all fire, 0.2 removes 20% of the current fire, and any amount above 0 has an effect. Start a pause of `maxStopFireTime * amount01` (keep the longer one if a pause is already running). After the pause the fire grows again from the new height.
+- `FireConfig.extinguishMinWater01` is no longer read. Keep the field so the asset still loads; mark it `[Obsolete]` in a comment or tooltip.
+- Roof: `RoofSlab` gets `float Fire01` (0..1). While its side has reached the top and is not paused, Fire01 grows toward 1 over `roofIgniteTime`. Water on the side or on the slab sets `Fire01 *= (1 - amount01)`. `OnFire` means `Fire01 > FireConfig.roofFireKillThreshold` (default 0.1); only then does the slab kill. `roofFireView.SetFill(Fire01)`, and the roof fire and smoke effects play while OnFire.
+- New FireConfig field: `roofFireKillThreshold` 0.1.
+
+Rotor blur (visual only):
+- `Assets/Shaders/RotorBlur.shader`: hand-written HLSL, URP Unlit, Transparent, Cull Off, ZWrite Off, drawn on a flat disc mesh (a Quad, UV center at 0.5, 0.5). Properties: `_BladeCount` (int, default 4), `_Speed` (turns per second, set by script), `_Angle` (current angle in turns, set by script), `_BladeColor`, `_DiscColor` (faint, alpha about 0.08), `_BladeWidth`, `_Smear` (how far each blade's streak trails, in turns), `_HubRadius`, `_TipFade`. In polar UV coordinates it draws `_BladeCount` streaks that trail behind each blade (exponential falloff over `_Smear`), plus the faint disc, fading near the hub and the tip, so it reads as fast-spinning blurred blades.
+- Materials `M_RotorBlur_Main` and `M_RotorBlur_Tail` in `Assets/Materials/`.
+- VFX module: `RotorBlurView : MonoBehaviour` ([RequireComponent(Renderer)]). `void SetSpeed(float turnsPerSecond)`, `void SetVisible(bool)`. It accumulates `_Angle` in Update with a MaterialPropertyBlock (no material instances), so the speed can change without the pattern jumping.
+- HeliController: serialized `RotorBlurView mainRotorBlur, tailRotorBlur` and `Renderer[] bladeRenderers` (the real blade meshes). In Initialize it hides the blade renderers and shows the blur discs. It sets the speed every frame from HeliConfig: `mainRotorTurnsPerSecond` (default 6), `tailRotorTurnsPerSecond` (default 12), `rotorIdleFactor` (0.8, used when there is no input) and `rotorLoadFactor` (1.2, used at full climb input). On Crash it hides the blur discs and shows the blade renderers again, before the break-apart, so the debris shows real blades.
+- The rotor colliders and RotorHazard do not change. The blur discs have no colliders.
 

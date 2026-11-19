@@ -98,3 +98,27 @@ Spec: GAME_DESIGN.md section 11 (and sections 1, 3, 7). The user's `HumanAnimato
 - P7-2 Hooks. gameplay-coder. Files: S/Fire/FireSide.cs, S/Fire/GroundFireZone.cs, S/Rescue/WaterDrop.cs (Hit event), S/Rescue/Human.cs (Stun), S/Rescue/Cup.cs (Tug). Check: compiles, effects null-safe.
 - P7-3 Assign prefabs. scene-builder. Files: Assets/Scenes/Main.unity. Check: no missing references.
 - P7-4 Full suite. playtester. Files: all Assets/Tests/PlayMode/*.cs. Check: every `[TEST]` line PASS; list in PROGRESS.md with a tuning guide pointing at Assets/Settings/.
+
+## Phase 8: water drop look, proportional extinguishing, rotor blur
+Design: GAME_DESIGN.md section 12. Do not change the contract.
+- P8-1 Drop material. vfx-artist. Files: Assets/Materials/M_WaterDrop.mat, WaterDrop prefab renderer (keep the trail). Check: material is URP Lit, transparent, blue alpha 0.45, assigned to the prefab renderer.
+- P8-2 Rotor blur assets. vfx-artist. Files: Assets/Shaders/RotorBlur.shader, Assets/Materials/M_RotorBlur_Main.mat, M_RotorBlur_Tail.mat, S/VFX/RotorBlurView.cs. Check: shader compiles with no console errors; SetSpeed/SetVisible work; no material instances created.
+- P8-3 Proportional extinguishing. gameplay-coder. Files: S/Fire/FireConfig.cs (`roofFireKillThreshold` 0.1, extinguishMinWater01 marked obsolete), S/Fire/FireSide.cs, S/Fire/RoofSlab.cs (Fire01), S/Fire/GroundFireZone.cs (no min-water check), S/Rescue/Cup.cs and WaterDrop.cs (pass Water01 at drop time, keep signatures). Check: compiles; extinguishMinWater01 not read anywhere (grep).
+- P8-4 Rotor blur in the heli. gameplay-coder. Files: S/Heli/FlameAndBlame.Heli.asmdef (add `FlameAndBlame.VFX`, currently missing), S/Heli/HeliConfig.cs (4 fields), S/Heli/HeliController.cs (mainRotorBlur, tailRotorBlur, bladeRenderers, speed factor, Initialize hides blades, Crash restores blades and hides blur before break-apart). Check: compiles, no cycle, null refs tolerated.
+- P8-5 Update old tests. gameplay-coder. Files: Assets/Tests/PlayMode/FireWaterTests.cs (lines ~185-186 use `extinguishMinWater01 * 0.5f` and `- 0.01f` and expect no effect: rewrite to expect proportional effect), Assets/Tests/PlayMode/RoofSlabTests.cs (Extinguish(1f) calls at ~114, 148 stay valid; check the OnFire-after-extinguish and kill tests against Fire01 growth and the 0.1 threshold: ignite tests must wait for Fire01 > threshold). Check: both files PASS.
+- P8-6 Compile. compiler. Check: no errors.
+- P8-7 Scene. scene-builder. Files: Assets/Scenes/Main.unity. Child `RotorBlur` (Quad, no collider, matching material, RotorBlurView) under MainRotor and TailRotor, in the blade plane, scaled to the blade span; assign mainRotorBlur, tailRotorBlur, bladeRenderers on HeliController. Rotor colliders not moved or resized. Check: read the fields back, none null; no console errors at start.
+- P8-8 Compile. compiler. Check: no errors.
+- P8-9 Tests. playtester. Files: Assets/Tests/PlayMode/ExtinguishTests.cs, RotorBlurTests.cs (test mode off where possible). `[TEST]` PASS for:
+  - `drop_material_transparent`: WaterDrop prefab renderer uses M_WaterDrop, surface transparent.
+  - `extinguish_full_zero`, `extinguish_20_percent` (within 0.01), `extinguish_tiny_lowers` (0.01 lowers Height01).
+  - `extinguish_pause_scaled`: PauseTimeLeft == maxStopFireTime * amount; a shorter second pause does not shorten it.
+  - `roof_fire01_share`: Fire01 *= (1 - amount); `roof_kill_threshold`: kills above 0.1, not at or below.
+  - `lost_side_ignores_water`.
+  - `tug_passes_water_amount`: drop Amount01 equals Water01 at the drop.
+  - `rotor_blur_spins`: views visible, `_Angle` changes while flying, blade renderers disabled.
+  - `rotor_colliders_unmoved`: collider positions and sizes equal the start values.
+  - `crash_restores_blades`: after Crash blur hidden, blade renderers enabled on the debris.
+  - `rotor_hit_crashes`: RotorHazard.ReportHit still crashes the heli.
+  Rerun all earlier tests.
+- P8-10 Docs. main agent. Files: PROGRESS.md (what to check by eye, material and HeliConfig values that tune drop look and blur).

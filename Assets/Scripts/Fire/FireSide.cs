@@ -40,6 +40,8 @@ namespace FlameAndBlame.Fire
 		public bool IsLost { get; private set; }
 		public float PauseTimeLeft { get; private set; }
 		public event Action<FireSide> ReachedTop;
+		/// <summary>Raised by Extinguish with the clamped water amount (not when lost or zero).</summary>
+		public event Action<float> Extinguished;
 
 		public void Initialize(FireConfig config)
 		{
@@ -111,7 +113,6 @@ namespace FlameAndBlame.Fire
 				if (PauseTimeLeft > 0f) return;
 				PauseTimeLeft = 0f;
 				IsBurning = true;
-				Height01 = 0f;
 			}
 			if (Height01 < 1f)
 			{
@@ -126,15 +127,20 @@ namespace FlameAndBlame.Fire
 			UpdateBand();
 		}
 
-		/// <summary>Ignored if lost or below extinguishMinWater01. Otherwise the fire goes out for maxStopFireTime.</summary>
+		/// <summary>
+		/// Proportional: Height01 *= (1 - amount01), fire pauses for maxStopFireTime * amount01 (longer pause wins).
+		/// Ignored if lost or amount is 0. Raises Extinguished so the roof slab scales its own fire.
+		/// </summary>
 		public void Extinguish(float amount01)
 		{
-			if (_config == null || IsLost || amount01 < _config.extinguishMinWater01) return;
+			amount01 = Mathf.Clamp01(amount01);
+			if (_config == null || IsLost || amount01 <= 0f) return;
 			_delayLeft = 0f;
-			Height01 = 0f;
+			Height01 *= 1f - amount01;
 			IsBurning = false;
 			RoofOnFire = false;
-			PauseTimeLeft = _config.maxStopFireTime;
+			PauseTimeLeft = Mathf.Max(PauseTimeLeft, _config.maxStopFireTime * amount01);
+			Extinguished?.Invoke(amount01);
 			UpdateBand();
 			SyncEffects();
 		}

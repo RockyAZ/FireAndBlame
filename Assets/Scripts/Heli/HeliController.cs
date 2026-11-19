@@ -1,5 +1,6 @@
 using System;
 using FlameAndBlame.Core;
+using FlameAndBlame.VFX;
 using Injection;
 using UnityEngine;
 
@@ -12,6 +13,18 @@ namespace FlameAndBlame.Heli
 
 		[Tooltip("Optional visual child (Body) that leans toward the acceleration. No physical effect.")]
 		[SerializeField] private Transform visual;
+
+		[Header("Rotor blur")]
+		[Tooltip("Blur disc on the main rotor (RotorBlurView, optional).")]
+		[SerializeField] private RotorBlurView mainRotorBlur;
+		[Tooltip("Blur disc on the tail rotor (RotorBlurView, optional).")]
+		[SerializeField] private RotorBlurView tailRotorBlur;
+		[Tooltip("The real blade renderers: hidden while the blur discs show, shown again on crash.")]
+		[SerializeField] private Renderer[] bladeRenderers;
+
+		public RotorBlurView MainRotorBlur => mainRotorBlur;
+		public RotorBlurView TailRotorBlur => tailRotorBlur;
+		public Renderer[] BladeRenderers => bladeRenderers;
 
 		private Rigidbody _body;
 		private bool _ready, _testMode, _savedKinematic;
@@ -40,7 +53,26 @@ namespace FlameAndBlame.Heli
 			b.interpolation = RigidbodyInterpolation.Interpolate;
 			b.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
 			_noiseSeed = UnityEngine.Random.value * 1000f;
+			SetBlur(true);
 			_ready = true;
+		}
+
+		// Blur discs shown means real blades hidden, and the other way round.
+		private void SetBlur(bool blur)
+		{
+			if (mainRotorBlur != null) mainRotorBlur.SetVisible(blur);
+			if (tailRotorBlur != null) tailRotorBlur.SetVisible(blur);
+			if (bladeRenderers != null)
+				foreach (var r in bladeRenderers) if (r != null) r.enabled = !blur;
+		}
+
+		private void UpdateRotors()
+		{
+			float a = Mathf.Clamp01(Mathf.Max(new Vector2(_move.x, _move.z).magnitude, Mathf.Abs(_vertical)));
+			float factor = Mathf.Lerp(_config.rotorIdleFactor, 1f, a);
+			factor = Mathf.Lerp(factor, _config.rotorLoadFactor, Mathf.Clamp01(_vertical));
+			if (mainRotorBlur != null) mainRotorBlur.SetSpeed(_config.mainRotorTurnsPerSecond * factor);
+			if (tailRotorBlur != null) tailRotorBlur.SetSpeed(_config.tailRotorTurnsPerSecond * factor);
 		}
 
 		public void SetControlSource(IControlSource s) { _source = s; }
@@ -51,6 +83,7 @@ namespace FlameAndBlame.Heli
 			IsCrashed = true;
 			_move = Vector3.zero; _vertical = 0f; _yawInput = 0f;
 			foreach (var r in GetComponentsInChildren<RotorHazard>(true)) r.enabled = false;
+			SetBlur(false);   // real blades show (and become debris), also in test mode
 			if (!Body.isKinematic)
 			{
 				Body.useGravity = true;
@@ -65,7 +98,8 @@ namespace FlameAndBlame.Heli
 		{
 			foreach (var contact in c.contacts)
 			{
-				var hazard = contact.thisCollider.GetComponent<RotorHazard>();
+				// Any collider on or under a rotor (e.g. MainRotor/SecondRotorCollider) counts as that rotor.
+				var hazard = contact.thisCollider.GetComponentInParent<RotorHazard>();
 				if (hazard != null) { hazard.ReportHit(contact.otherCollider); if (IsCrashed) return; }
 			}
 		}
@@ -77,7 +111,8 @@ namespace FlameAndBlame.Heli
 			var parts = new System.Collections.Generic.List<Transform>();
 			foreach (var r in GetComponentsInChildren<MeshRenderer>())
 				// The cup (own Rigidbody) and anything under it stays out of the debris.
-				if (r.GetComponentInParent<Rigidbody>() == Body) parts.Add(r.transform);
+					// Blur discs are visual only and never become debris.
+					if (r.GetComponentInParent<Rigidbody>() == Body && r.GetComponent<RotorBlurView>() == null) parts.Add(r.transform);
 			foreach (var t in parts)
 			{
 				t.SetParent(null, true);
@@ -167,7 +202,9 @@ namespace FlameAndBlame.Heli
 
 		private void Update()
 		{
-			if (!_ready || visual == null || IsCrashed) return;
+			if (!_ready || IsCrashed) return;
+			UpdateRotors();
+			if (visual == null) return;
 			Vector3 local = Quaternion.Inverse(Quaternion.Euler(0f, Body.rotation.eulerAngles.y, 0f)) * _acceleration;
 			float k = _config.tiltVisualMaxDeg / Mathf.Max(_config.maxAcceleration, Mathf.Epsilon);
 			Quaternion tilt = Quaternion.Euler(local.z * k, 0f, -local.x * k);

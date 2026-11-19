@@ -182,12 +182,12 @@ namespace FlameAndBlame.Tests.PlayMode
             var side = _fire.Sides[1];
             IgniteTo(side, 0.3f);
             float before = side.Height01;
-            side.Extinguish(_fc.extinguishMinWater01 * 0.5f);
-            side.Extinguish(_fc.extinguishMinWater01 - 0.01f);
+            side.Extinguish(0f);
             string fail = null;
-            if (!Mathf.Approximately(side.Height01, before)) fail = $"Height01 {before} -> {side.Height01}";
-            else if (!side.IsBurning) fail = "IsBurning false after partial water";
-            else if (side.PauseTimeLeft > 0f) fail = "pause started by partial water";
+            if (!Mathf.Approximately(side.Height01, before) || !side.IsBurning || side.PauseTimeLeft > 0f) fail = "zero water changed the fire";
+            side.Extinguish(0.2f);
+            if (fail == null && !Mathf.Approximately(side.Height01, before * 0.8f)) fail = $"Height01 {before} -> {side.Height01}, expected {before * 0.8f}";
+            else if (fail == null && !Mathf.Approximately(side.PauseTimeLeft, _fc.maxStopFireTime * 0.2f)) fail = $"PauseTimeLeft={side.PauseTimeLeft}, expected {_fc.maxStopFireTime * 0.2f}";
             _tm.ExitAll();
             Report(n, fail == null, fail);
         }

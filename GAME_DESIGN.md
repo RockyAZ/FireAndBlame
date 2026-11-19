@@ -356,3 +356,49 @@ In FixedUpdate, `MovePosition` to a position where `FloatPoint.y = SurfaceY + fl
 2. For i in 0..`humanCount`-1: slab = `FireSystem.RoofSlabs[i % count]`; `Instantiate(humanPrefab)` at `slab.GetSpawnPoint()`, random yaw, parent `Game/Actors/Humans`; `Initialize(config)`; `SetState(WaitingOnRoof)`.
 3. Subscribe to every `StateChanged`, re-raise `AnyStateChanged`. `Humans` lists the spawned instances.
 `FireSystem.Initialize` (which initializes the slabs) runs first.
+
+## 12. Phase 8: drop look, proportional extinguishing, rotor blur
+Overrides earlier extinguish lines (sections 1, 4, 7, 10) where they differ. The WaterDrop stays whatever it is today (Launch/ReportHit signatures unchanged); Phase 8 only changes what the amount does.
+
+### Amount carried by the drop
+`Cup.Tug()` reads `Water01` once, before emptying, and passes it as `amount01` to `WaterDrop.Launch`. The drop keeps it in `Amount01` and passes it to every Extinguish call. Empty tank (<= emptyThreshold): no drop, as before.
+
+### Side (FireSide.Extinguish(amount01))
+1. Lost side or `amount01 <= 0`: do nothing.
+2. `Height01 = Height01 * (1 - amount01)` (1 removes all, 0.2 removes 20% of the current fire, 0.01 removes 1%).
+3. Pause: `PauseTimeLeft = max(PauseTimeLeft, maxStopFireTime * amount01)`. The longer running pause is kept. After the pause the fire grows from the new height.
+4. Roof: the slab's `Fire01` is scaled too (below). `RoofOnFire` is no longer cleared by water on its own; the slab handles it.
+`FireConfig.extinguishMinWater01` stays in the asset, is not read anywhere, and its tooltip says "Obsolete, not used". `GroundFireZone.Extinguish(amount01)` drops the min-water check too: it only returns early when `groundFirePermanent` is true; otherwise any amount > 0 puts it out.
+
+### Roof (RoofSlab.Fire01)
+- `float Fire01` (0..1), starts 0.
+- Advance (slab's own Update, public for tests): while `FireSide.RoofOnFire` (side reached the top) and the side is not paused, `Fire01 += dt / roofIgniteTime`, clamped to 1. While paused or not at the top it does not grow.
+- Water on the side wall or on the slab (`WaterDrop.ReportHit` already routes both to `RoofSlab.FireSide`, which calls the slab): `Fire01 *= (1 - amount01)`.
+- `OnFire = Fire01 > FireConfig.roofFireKillThreshold` (new field, 0.1). Only then `ReportStay` kills `IKillable`.
+- Visual: `roofFireView.SetFill(Fire01)`; roof fire and smoke effects Play while OnFire, Stop otherwise.
+
+### Water drop look
+`Assets/Materials/M_WaterDrop.mat`: URP Lit, Transparent, Blend Alpha, base color (0.2, 0.55, 1.0) alpha 0.45, smoothness 0.9, metallic 0, emission off. Assigned to the renderer of the WaterDrop prefab; the existing trail effect is kept. No gameplay number involved.
+
+### Rotor blur (visual only)
+- `RotorBlur.shader`, `M_RotorBlur_Main`, `M_RotorBlur_Tail` as in CLAUDE.md. Tail material may use fewer or more blades via `_BladeCount`.
+- `RotorBlurView` (VFX): `SetSpeed(turnsPerSecond)`, `SetVisible(bool)`; Update does `angle += speed * dt` (kept in turns, wrapped to 0..1) and writes `_Angle`, `_Speed` through a MaterialPropertyBlock.
+- HeliConfig fields (Heli module): `mainRotorTurnsPerSecond` 6 (turns/s), `tailRotorTurnsPerSecond` 12 (turns/s), `rotorIdleFactor` 0.8 (speed multiplier without input), `rotorLoadFactor` 1.2 (multiplier at full climb input).
+- Speed factor each frame, from the already smoothed command: `a = clamp01(max(|MoveWorld|, |Vertical|))`; `climb = clamp01(Vertical)` (only upward load); `factor = lerp(idle, 1, a)`, then `factor = lerp(factor, load, climb)`. Speed = base turns/s * factor. Rotors keep spinning when the heli is idle (factor idle) and on the ground. In test mode the same formula runs on the scripted command.
+- HeliController serialized `RotorBlurView mainRotorBlur, tailRotorBlur`, `Renderer[] bladeRenderers` (real blade meshes). Initialize: blade renderers disabled, blur views visible. `Crash()`: first hide blur views and enable blade renderers, then break the meshes into debris (so debris shows real blades). Null refs are skipped, no exceptions.
+- Rotor colliders, RotorHazard and the Rotors layer are untouched. Blur discs have no collider.
+- Assembly: Heli needs `FlameAndBlame.VFX` in its asmdef references (currently missing; CLAUDE.md table already allows it, VFX references only Injection and Core, so no cycle).
+- Scene: under `MainRotor` and `TailRotor` a child `RotorBlur` (Quad, no collider, matching material, `RotorBlurView`), lying in the plane the blades turn in, scaled to the blade span (diameter of the blades). Assigned to HeliController.
+
+### Config additions
+| Config | Field | Default | Unit |
+|---|---|---|---|
+| FireConfig | roofFireKillThreshold | 0.1 | 0..1 |
+| FireConfig | extinguishMinWater01 | 0.9 (obsolete, unused) | 0..1 |
+| HeliConfig | mainRotorTurnsPerSecond | 6 | turns/s |
+| HeliConfig | tailRotorTurnsPerSecond | 12 | turns/s |
+| HeliConfig | rotorIdleFactor | 0.8 | multiplier |
+| HeliConfig | rotorLoadFactor | 1.2 | multiplier |
+
+### Module check
+Heli -> VFX (RotorBlurView) goes down the table. Fire, Rescue unchanged. No new upward reference.

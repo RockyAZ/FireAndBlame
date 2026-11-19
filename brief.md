@@ -56,6 +56,11 @@ All gameplay variables live in ScriptableObjects. Interactions use physics: coll
 - Rescued humans in the pool float on the surface and drift around slowly, so the player has to dodge them when refilling.
 - A human scooped into the tank swims inside it (state 4) and uses the ChillPool animation for now.
 
+## Decisions (Phase 8)
+- The water drop looks like clear blue water (transparent material).
+- Water puts out fire in proportion to how full the tank was: a full tank removes all of a side's fire, 20% removes 20% of the current fire, and even 1% has some effect. The pause before the fire grows again is scaled the same way. Roof fire works the same way: it has its own fire level, and it only kills above a small threshold.
+- The rotors show a fast-spin blur made by a shader. The real blades and their colliders do not move; the blur is only visual. On a crash the blur disappears and the real blades fall off with the debris.
+
 ## Architecture
 Module-based systems, each folder with its own text-written asmdef (references by name), wired by dependency injection from a single `MainEntry` GameObject. Full rules, module table and contract are in CLAUDE.md.
 
@@ -63,10 +68,11 @@ Module-based systems, each folder with its own text-written asmdef (references b
 HeliConfig: maxHorizontalSpeed 12, maxVerticalSpeed 6, inputRiseTime 0.6, inputFallTime 0.9, velocityResponse 1.5, maxAcceleration 6, maxYawRate 60 deg/s, yawDriftTorque 0.6, driftNoiseFrequency 0.25, levelingStrength 2, tiltVisualMaxDeg 12, linearDrag 0.3, angularDrag 1.5, rigidbodyMass 10.
 CupConfig: capacity 100, fillRatePerSecond 25, emptyThreshold 0.05, fullThreshold 0.95, maxHumans 2, segmentCount 3, segmentLength 2, jointAngularLimitDeg 40, jointSpring 50, jointDamper 8, grabZoneRadius 1.2, dumpDropRadius 1.5, bumpImpulse 4.
 HumanConfig: maxStrength 100, accelerationThreshold 4, strengthLossFactor 6, strengthRecoveryPerSecond 3, stunDuration 2.5, animatorTriggers per state (WaitingOnRoof, RescuedHanging, ChillingInPool, SwimmingInTank, Dead), humanCount 4, mass 60, hangJointLinearLimit 0.3, hangJointSpring 200, hangJointDamper 20, hangJointAngularLimitDeg 60, floatHeight 0.0, bobAmplitude 0.1, bobFrequency 0.5, driftSpeed 0.8, driftRetargetTime 4, driftSeparation 1.2, standUpSpeed 4.
-FireConfig: spreadSecondsPerFloor 12, maxStopFireTime 20, extinguishMinWater01 0.9, groundFirePermanent true, lostSpreadSecondsPerFloor 3.
+FireConfig: spreadSecondsPerFloor 12, maxStopFireTime 20, extinguishMinWater01 0.9 (unused since Phase 8), roofFireKillThreshold 0.1, groundFirePermanent true, lostSpreadSecondsPerFloor 3.
 BuildingConfig: floors 5, floorHeight 3.5, footprint 12 x 12, roofHumanSpawnMargin 1.5.
 PoolConfig (inside GameRulesConfig): poolSize 10 x 2.5 x 6, distanceFromBuilding 14.
 FireConfig visuals: wallFireSmoothTime 0.4, roofIgniteTime 1.5, roofFireHeight 1.5.
 CupConfig water ball and visuals: waterBallRadius 0.8, waterBallMass 20, waterBallLifetime 6, waterBallKillY -5, fillVisualSmoothTime 0.3.
 UIConfig: controlsHintText "WASD move (camera) | Space/Ctrl up/down | Z/X turn | F drop water | Mouse look | Wheel zoom", hintFontSize 22, hintMargin 20.
 GameRulesConfig: scorePerRescued 100, penaltyPerDeath 25, bonusPerSideNotOnFire 25, endOnAllSidesBurning true.
+HeliConfig rotor blur: mainRotorTurnsPerSecond 6, tailRotorTurnsPerSecond 12, rotorIdleFactor 0.8, rotorLoadFactor 1.2.

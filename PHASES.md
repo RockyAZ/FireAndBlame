@@ -208,3 +208,42 @@ Step 6, playtester: run the full PlayMode suite and report the results.
 
 Step 7, main agent: update PROGRESS.md with a short tuning guide that points to the ScriptableObjects.
 ```
+
+---
+
+## Phase 8: water drop look, proportional extinguishing, rotor blur
+
+**Output:** a transparent blue material on the water drop, fire put out in proportion to how full the tank was, and a rotor blur shader that makes the main and tail rotors look like they spin fast while their colliders stay still.
+
+**Gate:** in real Play mode, the drop looks like clear blue water, a 20% tank removes about 20% of a side's fire and a full tank removes all of it, any water at all has a visible effect, the rotors look like fast-spinning blurred blades, and the blades still crash the heli on contact. All earlier tests still pass.
+
+**Prompt:**
+```
+Read CLAUDE.md (including "Contract additions (Phase 8)"), brief.md, GAME_DESIGN.md, TASKS.md and PROGRESS.md. Phase 8 only. Use the subagents. Minimize screenshots.
+
+Step 1, game-designer: add a Phase 8 section to GAME_DESIGN.md and TASKS.md from "Contract additions (Phase 8)": proportional extinguishing (side and roof), the drop material and the rotor blur. Do not change the contract.
+
+Step 2, vfx-artist: create Assets/Materials/M_WaterDrop.mat (transparent blue water look as in CLAUDE.md) and assign it to the WaterDrop prefab renderer. Keep the existing trail. Then write Assets/Shaders/RotorBlur.shader, create M_RotorBlur_Main and M_RotorBlur_Tail, and write RotorBlurView in the VFX module.
+
+Step 3, gameplay-coder: make FireSide.Extinguish and the roof fire proportional to the water amount as specified, scale the pause by the amount, stop using extinguishMinWater01, and make sure WaterDrop and Cup.Tug pass the tank's Water01 at the moment of the drop. Add the Heli to VFX asmdef reference, add the rotor blur fields to HeliConfig and HeliController, and hide or show the blade renderers as specified. Update every test that relied on the old minimum-water rule.
+
+Step 4, compiler: check that the project compiles.
+
+Step 5, scene-builder: add a RotorBlur disc child to MainRotor and to TailRotor (no collider, the matching material, RotorBlurView), sized to the blade span and lying in the plane the blades turn in. Assign them to HeliController. Do not move, resize or remove the rotor colliders. Read the new fields back to confirm none is null.
+
+Step 6, compiler: check that the project compiles.
+
+Step 7, playtester: with test mode OFF where possible, write and run tests showing that:
+- the WaterDrop prefab renderer uses M_WaterDrop and its material is transparent,
+- a drop with amount 1 sets a side's Height01 to 0; with 0.2 it removes 20% of the side's current fire (within 0.01); with 0.01 it still lowers Height01,
+- the pause equals maxStopFireTime times the amount,
+- a burning roof slab's fire level drops by the same share, and the slab stops killing only below roofFireKillThreshold,
+- a lost side still ignores water,
+- the rotor blur views spin while the heli flies, the blade mesh renderers are hidden, and the rotor colliders have not moved,
+- after a crash the blur discs are hidden and the blade renderers are shown again on the debris,
+- a rotor hit still crashes the heli.
+Rerun all earlier tests.
+
+Step 8, main agent: update PROGRESS.md with what to check by eye and which material and HeliConfig values tune the drop look and the rotor blur.
+```
+
