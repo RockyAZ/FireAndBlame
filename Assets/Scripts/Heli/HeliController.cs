@@ -31,6 +31,9 @@ namespace FlameAndBlame.Heli
 		private IControlSource _savedSource;
 		private Vector3 _move;
 		private float _vertical, _yawInput, _yawRate, _noiseSeed;
+		// Auto-align heading error, tracked continuously (not re-wrapped each step) so the turn never reverses at 180 deg.
+		private float _alignError, _alignPrevSigned;
+		private bool _alignTracking;
 		private Vector3 _velocity, _acceleration;
 
 		public Rigidbody Body => _body != null ? _body : (_body = GetComponent<Rigidbody>());
@@ -81,7 +84,7 @@ namespace FlameAndBlame.Heli
 		{
 			if (IsCrashed) return;
 			IsCrashed = true;
-			_move = Vector3.zero; _vertical = 0f; _yawInput = 0f;
+			_move = Vector3.zero; _vertical = 0f; _yawInput = 0f; _alignTracking = false;
 			foreach (var r in GetComponentsInChildren<RotorHazard>(true)) r.enabled = false;
 			SetBlur(false);   // real blades show (and become debris), also in test mode
 			if (!Body.isKinematic)
@@ -154,6 +157,21 @@ namespace FlameAndBlame.Heli
 			_source = _savedSource;
 		}
 
+		/// <summary>
+		/// Heading error toward the camera, unwrapped. The wrapped signed angle flips from +180 to -180 when the camera
+		/// gets half a turn ahead of a lagging heli, which made the heli reverse and rock. Accumulating the frame-to-frame
+		/// change keeps the turn going the way the camera went; whole extra circles are dropped (|error| stays within 360).
+		/// </summary>
+		private float AlignError(float signed)
+		{
+			if (!_alignTracking) { _alignError = signed; _alignTracking = true; }
+			else _alignError += Mathf.DeltaAngle(_alignPrevSigned, signed);
+			_alignPrevSigned = signed;
+			if (_alignError > 360f) _alignError -= 360f;
+			else if (_alignError < -360f) _alignError += 360f;
+			return _alignError;
+		}
+
 		private void FixedUpdate()
 		{
 			if (!_ready || IsCrashed) return;
@@ -176,13 +194,16 @@ namespace FlameAndBlame.Heli
 			{
 				// Turn rate toward the camera heading, closed with alignSmoothTime (drift stays a disturbance).
 				Vector3 fwd = Vector3.ProjectOnPlane(Body.rotation * Vector3.forward, Vector3.up);
-				float delta = fwd.sqrMagnitude > 1e-4f ? Vector3.SignedAngle(fwd, face, Vector3.up) : 0f;
+				float delta = AlignError(fwd.sqrMagnitude > 1e-4f ? Vector3.SignedAngle(fwd, face, Vector3.up) : 0f);
 				float rate = Mathf.Clamp(delta * _config.alignGain, -_config.alignMaxYawRate, _config.alignMaxYawRate) * Mathf.Deg2Rad;
 				yawAccel = (rate - w) / Mathf.Max(_config.alignSmoothTime, 0.01f) + noise * _config.yawDriftTorque;
 			}
 			else
+			{
+				_alignTracking = false;
 				yawAccel = (_yawInput * _config.maxYawRate * Mathf.Deg2Rad - w) * _config.velocityResponse
 					+ noise * _config.yawDriftTorque;
+			}
 
 			if (_testMode)
 			{

@@ -161,6 +161,7 @@ namespace FlameAndBlame.Tests.PlayMode
             var after = _pcs.Read().MoveWorld;
             yield return Press();
             Debug.Log($"[TEST-INFO] {n} heli turned {turned:F1} deg; MoveWorld before={before} after={after}");
+            Debug.Log($"[TEST-INFO] {n} DIAG crashed={_heli.IsCrashed} timeScale={Time.timeScale} paused={FlameAndBlame.Core.GamePause.IsPaused} blocked={FlameAndBlame.Core.GamePause.InputBlocked} kinematic={_heli.Body.isKinematic} gravity={_heli.Body.useGravity} pos={_heli.Body.position} angVel={_heli.Body.angularVelocity}");
             if (turned < 20f) fail = $"heli only turned {turned:F1} deg, test is meaningless";
             else if (Angle(before, after) > 5f) fail = $"MoveWorld changed by {Angle(before, after):F1} deg after heli yaw";
 
