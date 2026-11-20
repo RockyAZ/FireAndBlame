@@ -24,7 +24,7 @@ namespace FlameAndBlame.Heli
 				.With("Left", "<Keyboard>/a").With("Right", "<Keyboard>/d");
 			_vertical = new InputAction("Vertical", InputActionType.Value);
 			_vertical.AddCompositeBinding("1DAxis")
-				.With("Positive", "<Keyboard>/space").With("Negative", "<Keyboard>/leftCtrl");
+				.With("Positive", "<Keyboard>/space").With("Negative", "<Keyboard>/leftShift");
 			_yaw = new InputAction("Yaw", InputActionType.Value);
 			_yaw.AddCompositeBinding("1DAxis")
 				.With("Positive", "<Keyboard>/x").With("Negative", "<Keyboard>/z");
